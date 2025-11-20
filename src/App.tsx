@@ -6,6 +6,8 @@ import { FeedPage } from './components/FeedPage';
 import { ReelsGridPage } from './components/ReelsGridPage';
 import { ReelsViewer } from './components/ReelsViewer';
 import { Toaster } from './components/ui/sonner';
+import { PostsProvider } from './contexts/PostsContext';
+
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -28,6 +30,7 @@ export default function App() {
   }
 
   return (
+    <PostsProvider>
     <Router>
       <div className="min-h-screen bg-[#0A0A0F]">
         <Routes>
@@ -51,5 +54,6 @@ export default function App() {
         <Toaster />
       </div>
     </Router>
+    </PostsProvider>
   );
 }

@@ -168,9 +168,9 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
       <div className="px-4 py-3">
         <p className="text-sm mb-2">{post.caption}</p>
         <div className="flex flex-wrap gap-2">
-          {post.tags.map(tag => (
+          {post.tags.map((tag,index) => (
             <span
-              key={tag}
+              key={`${tag}-${index}`}
               className="px-3 py-1 rounded-full bg-[#1E1E2E] text-xs text-[#00A8FF] border border-[#00A8FF]/20"
             >
               #{tag}

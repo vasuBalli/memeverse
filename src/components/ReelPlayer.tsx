@@ -192,9 +192,9 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">
-          {post.tags.map(tag => (
+          {post.tags.map((tag,index) => (
             <span
-              key={tag}
+              key={`${tag}-${index}`}
               className="px-2 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs text-[#00A8FF]"
             >
               #{tag}
