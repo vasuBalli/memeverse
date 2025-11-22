@@ -11,7 +11,7 @@ export function ReelsViewer() {
   const navigate = useNavigate();
   const { posts: globalPosts } = usePosts();
 
-  // Get posts from location.state (if navigated from grid/feed), else from globalPosts
+  // Get posts from location.state (if navigated from grid/feed), else from globalPostss
   const [posts, setPosts] = useState<Post[]>([]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
