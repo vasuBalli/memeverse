@@ -4,11 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { ReelTile } from '../components/ReelTile';
 import { ReelTileSkeleton } from '../components/SkeletonLoader';
 import { FloatingActionButton } from '../components/FloatingActionButton';
-import { mockMemes, generateMoreMemes } from '../data/mockData';
+
 import { Meme } from '../types';
 
 export function ReelsGrid() {
-  const [reels, setReels] = useState<Meme[]>(mockMemes);
+  const [reels, setReels] = useState<Meme[]>();
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const observerRef = useRef<HTMLDivElement>(null);

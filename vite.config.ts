@@ -57,7 +57,12 @@
       port: 5500,
       open: true,
       proxy: {
-        "/api" : "https://getdownload.site/"
-      }
+      // anything starting with /api will be proxied
+      '/api': {
+        target: 'https://memeverse.in',
+        changeOrigin: true,
+        secure: true, // or false if you have cert issues
+      },
+    },
     },
   });

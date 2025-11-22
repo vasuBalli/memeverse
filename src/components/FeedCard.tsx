@@ -1,10 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type React from 'react';
 import { Post, formatNumber } from '../data/mockData';
 import { Download, Share2, Volume2, VolumeX } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ImageCarousel } from './ImageCarousel';
 import { toast } from 'sonner@2.0.3';
+import { useLazyVideo } from '../hooks/useLazyVideo';
 
 interface FeedCardProps {
   post: Post;
@@ -14,11 +16,10 @@ interface FeedCardProps {
 
 export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
   const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const { videoRef, shouldLoad } = useLazyVideo();
 
-  // Auto-play video when in viewport
+  // Auto-play / pause video when in viewport
   useEffect(() => {
     if (post.type !== 'video' || !videoRef.current) return;
 
@@ -27,10 +28,8 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
             videoRef.current?.play().catch(() => {});
-            setIsPlaying(true);
           } else {
             videoRef.current?.pause();
-            setIsPlaying(false);
           }
         });
       },
@@ -40,16 +39,16 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
     observer.observe(videoRef.current);
 
     return () => observer.disconnect();
-  }, [post.type]);
+  }, [post.type, videoRef]);
 
   const handleMediaClick = () => {
     // Only navigate to reels viewer for videos
     if (post.type === 'video') {
-      navigate(`/reels/${post.id}`, { 
-        state: { 
-          posts: allPosts.length > 0 ? allPosts : [post], 
-          initialIndex: postIndex 
-        } 
+      navigate(`/reels/${post.id}`, {
+        state: {
+          posts: allPosts.length > 0 ? allPosts : [post],
+          initialIndex: postIndex,
+        },
       });
     }
   };
@@ -83,7 +82,7 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
   const handleMuteToggle = () => {
     if (videoRef.current) {
       videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(!isMuted);
+      setIsMuted((prev) => !prev);
     }
   };
 
@@ -100,9 +99,8 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
         </div>
       </div>
 
-      {/* Media - Clickable for videos only */}
+      {/* Media */}
       {post.type === 'image' ? (
-        // Use carousel if multiple images, otherwise single image
         post.images && post.images.length > 0 ? (
           <ImageCarousel images={post.images} alt={post.caption} />
         ) : (
@@ -115,20 +113,22 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
           </div>
         )
       ) : (
-        <div 
+        <div
           className="relative aspect-[4/5] bg-[#0A0A0F] overflow-hidden cursor-pointer group"
           onClick={handleMediaClick}
         >
           <video
             ref={videoRef}
-            src={post.url}
-            className="w-full h-full object-cover"
-            loop
+            src={shouldLoad ? post.url : undefined}
+            controls
             playsInline
             muted={isMuted}
+            preload="metadata"
+            poster={post.thumbnail}
+            className="w-full h-full object-cover"
           />
-          
-          {/* Mute/Unmute button for videos */}
+
+          {/* Mute/Unmute button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -147,15 +147,12 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
 
       {/* Actions */}
       <div className="flex items-center gap-4 px-4 py-3 border-b border-white/5">
-        <button
-          onClick={handleDownload}
-          className="flex items-center gap-2 group"
-        >
+        <button onClick={handleDownload} className="flex items-center gap-2 group">
           <Download className="w-6 h-6 text-[#6B6B7B] group-hover:text-[#00A8FF] transition-colors" />
           <span className="text-sm text-[#A0A0B0]">Download</span>
         </button>
 
-        <button 
+        <button
           onClick={handleShare}
           className="flex items-center gap-2 group ml-auto"
         >
@@ -168,12 +165,12 @@ export function FeedCard({ post, allPosts = [], postIndex = 0 }: FeedCardProps) 
       <div className="px-4 py-3">
         <p className="text-sm mb-2">{post.caption}</p>
         <div className="flex flex-wrap gap-2">
-          {post.tags.map((tag,index) => (
+          {post.tags.map((tag, index) => (
             <span
               key={`${tag}-${index}`}
               className="px-3 py-1 rounded-full bg-[#1E1E2E] text-xs text-[#00A8FF] border border-[#00A8FF]/20"
             >
-              #{tag}
+              {tag.startsWith('#') ? tag : `#${tag}`}
             </span>
           ))}
         </div>

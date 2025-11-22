@@ -14,42 +14,112 @@ interface ReelPlayerProps {
   hasPrevious: boolean;
 }
 
-export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
+export function ReelPlayer({
+  post,
+  isActive,
+  onNext,
+  onPrevious,
+  hasNext,
+  hasPrevious,
+}: ReelPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const [progress, setProgress] = useState(0);
   const [showControls, setShowControls] = useState(false);
-  
-  const videoRef = useRef<HTMLVideoElement>(null);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hideControlsTimeout = useRef<number | null>(null);
+
+  // Play / pause based on isActive + isPlaying
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || post.type !== 'video') return;
 
     if (isActive && isPlaying) {
-      video.play().catch(() => {});
+      video
+        .play()
+        .catch(() => {
+          // autoplay might be blocked; user can tap to play
+        });
     } else {
       video.pause();
     }
-  }, [isActive, isPlaying]);
+  }, [isActive, isPlaying, post.type]);
 
+  // Reset progress when post changes
+  useEffect(() => {
+    setProgress(0);
+    setIsPlaying(true);
+  }, [post.id]);
+
+  // Progress bar update
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || post.type !== 'video') return;
 
     const updateProgress = () => {
-      const progress = (video.currentTime / video.duration) * 100;
-      setProgress(progress);
+      if (!video.duration || Number.isNaN(video.duration)) {
+        setProgress(0);
+        return;
+      }
+      const value = (video.currentTime / video.duration) * 100;
+      setProgress(value);
     };
 
     video.addEventListener('timeupdate', updateProgress);
-    return () => video.removeEventListener('timeupdate', updateProgress);
-  }, []);
+    return () => {
+      video.removeEventListener('timeupdate', updateProgress);
+    };
+  }, [post.type]);
+
+  // Auto-next when video ends (like IG Reels)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || post.type !== 'video') return;
+
+    const handleEnded = () => {
+      if (isActive && hasNext) {
+        onNext();
+      } else if (isActive && !hasNext) {
+        // if no next reel, you can either loop or restart
+        video.currentTime = 0;
+        video.play().catch(() => {});
+      }
+    };
+
+    video.addEventListener('ended', handleEnded);
+    return () => {
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, [isActive, hasNext, onNext, post.type]);
+
+  // Keyboard support: up/down arrows to move between reels
+  useEffect(() => {
+    if (!isActive) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' && hasNext) {
+        onNext();
+      } else if (e.key === 'ArrowUp' && hasPrevious) {
+        onPrevious();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isActive, hasNext, hasPrevious, onNext, onPrevious]);
 
   const handleVideoClick = () => {
-    setIsPlaying(!isPlaying);
+    setIsPlaying((prev) => !prev);
     setShowControls(true);
-    setTimeout(() => setShowControls(false), 500);
+
+    if (hideControlsTimeout.current) {
+      window.clearTimeout(hideControlsTimeout.current);
+    }
+
+    hideControlsTimeout.current = window.setTimeout(() => {
+      setShowControls(false);
+    }, 500);
   };
 
   const handleDownload = async () => {
@@ -78,9 +148,9 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
 
   return (
     <div className="relative w-full h-full bg-black flex items-center justify-center">
-      {/* Video */}
+      {/* Video / Image */}
       <div
-        onClick={handleVideoClick}
+        onClick={post.type === 'video' ? handleVideoClick : undefined}
         className="relative w-full h-full max-w-[600px] mx-auto cursor-pointer"
       >
         {post.type === 'video' ? (
@@ -103,7 +173,7 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
 
         {/* Play/Pause overlay */}
         <AnimatePresence>
-          {showControls && (
+          {showControls && post.type === 'video' && (
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -160,7 +230,7 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
         {/* Mute/Unmute */}
         {post.type === 'video' && (
           <button
-            onClick={() => setIsMuted(!isMuted)}
+            onClick={() => setIsMuted((prev) => !prev)}
             className="flex flex-col items-center gap-1 group"
           >
             <div className="w-12 h-12 rounded-full glass flex items-center justify-center">
@@ -192,12 +262,13 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">
-          {post.tags.map((tag,index) => (
+          {post.tags.map((tag, index) => (
             <span
               key={`${tag}-${index}`}
               className="px-2 py-1 rounded-full bg-white/10 backdrop-blur-sm text-xs text-[#00A8FF]"
             >
-              #{tag}
+              {/* tags coming from API already include #, so no extra # */}
+              {tag}
             </span>
           ))}
         </div>

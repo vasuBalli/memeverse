@@ -12,14 +12,16 @@ interface PostsContextValue {
   posts: Post[];
   loading: boolean;
   error: string | null;
+  hasMore: boolean;
   refresh: () => Promise<void>;
+  loadMore: () => Promise<void>;
 }
 
 interface ApiPost {
   id: number;
   title: string;
   file_url: string;
-  tags: string; // comma-separated string from API
+  tags: string;
   user_name: string;
   created_at: string;
   type: 'image' | 'video';
@@ -39,66 +41,91 @@ interface PostsProviderProps {
 
 export const PostsProvider: React.FC<PostsProviderProps> = ({ children }) => {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [hasMore, setHasMore] = useState<boolean>(true);
 
-  const fetchPosts = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const fetchPosts = useCallback(
+    async (pageToLoad: number, append: boolean) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const deviceId = getDeviceId();
+        const deviceId = getDeviceId();
 
-      const res = await fetch('/api/memes/', {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-Id': deviceId,
-        },
-      });
+        const res = await fetch(`/api/feed/?page=${pageToLoad}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-Id': deviceId,
+          },
+        });
 
-      if (!res.ok) {
-        throw new Error(`Failed to fetch posts: ${res.status}`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch posts: ${res.status}`);
+        }
+
+        const response: ApiResponse = await res.json();
+        const data = response.data ?? [];
+
+        const normalized: Post[] = data.map((apiPost) => ({
+          id: String(apiPost.id),
+          type: apiPost.type,
+          url: apiPost.file_url,
+          images: undefined,
+          aspectRatio: undefined,
+          thumbnail: undefined,
+          caption: apiPost.title,
+          tags: apiPost.tags
+            ? Array.from(
+                new Set(
+                  apiPost.tags
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                )
+              )
+            : [],
+          deviceId,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          views: 0,
+        }));
+
+        setPosts((prev) => (append ? [...prev, ...normalized] : normalized));
+        setHasMore(normalized.length > 0);
+        setPage(pageToLoad);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Unknown error while fetching posts';
+        setError(message);
+      } finally {
+        setLoading(false);
       }
+    },
+    []
+  );
 
-      const response: ApiResponse = await res.json();
-
-      // ✅ Your array is response.data
-      const data = response.data ?? [];
-
-      const normalized: Post[] = data.map((apiPost) => ({
-        id: String(apiPost.id),                // Post.id is string, API id is number
-        type: apiPost.type,                   // 'image' | 'video'
-        url: apiPost.file_url,                // map backend file_url → url
-        images: undefined,                    // not provided for now
-        aspectRatio: undefined,               // could be computed later
-        thumbnail: undefined,                 // could be derived if needed
-        caption: apiPost.title,               // use title as caption
-        tags: apiPost.tags
-          ? apiPost.tags.split(',').map((t) => t.trim()).filter(Boolean)
-          : [],
-        deviceId,
-        likes: 0,                             // backend doesn't send; default 0
-        comments: 0,
-        shares: 0,
-        views: 0,
-      }));
-
-      setPosts(normalized);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Unknown error while fetching posts';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchPosts();
+  const refresh = useCallback(async () => {
+    await fetchPosts(1, false);
   }, [fetchPosts]);
 
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore) return;
+    await fetchPosts(page + 1, true);
+  }, [fetchPosts, page, loading, hasMore]);
+
+  useEffect(() => {
+    // initial load
+    fetchPosts(1, false);
+  }, [fetchPosts]);
+
+  // 🔴 IMPORTANT: this must RETURN JSX
   return (
-    <PostsContext.Provider value={{ posts, loading, error, refresh: fetchPosts }}>
+    <PostsContext.Provider
+      value={{ posts, loading, error, hasMore, refresh, loadMore }}
+    >
       {children}
     </PostsContext.Provider>
   );

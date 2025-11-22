@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { FullscreenReelViewer } from '../components/FullscreenReelViewer';
 import { ReelViewerSkeleton } from '../components/SkeletonLoader';
-import { mockMemes } from '../data/mockData';
 import { Meme } from '../types';
 
 export function ReelViewer() {

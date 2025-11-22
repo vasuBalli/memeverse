@@ -10,12 +10,13 @@ import { toast } from 'sonner@2.0.3';
 import { usePosts } from '../contexts/PostsContext';
 
 export function FeedPage() {
-  const { posts, loading, error, refresh } = usePosts();
+  const { posts, loading, error, refresh, loadMore, hasMore } = usePosts();
   const [localPosts, setLocalPosts] = useState(posts);
   const [page, setPage] = useState(1);
   const observerRef = useRef<HTMLDivElement>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  
 
   // Sync context posts → localPosts (only when API loads)
   useEffect(() => {
@@ -23,14 +24,22 @@ export function FeedPage() {
   }, [posts]);
 
   // Restore scroll
-  useEffect(() => {
-    const saved = sessionStorage.getItem('feed-scroll-position');
-    if (saved) window.scrollTo(0, parseInt(saved));
 
-    return () => {
-      sessionStorage.setItem('feed-scroll-position', window.scrollY.toString());
-    };
-  }, []);
+useEffect(() => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && !loading && hasMore) {
+        loadMore();  // <-- NOW using context loadMore
+      }
+    },
+    { threshold: 0.5 }
+  );
+
+  if (observerRef.current) observer.observe(observerRef.current);
+  return () => observer.disconnect();
+}, [loading, hasMore, loadMore]);
+
+
 
   // Infinite scroll trigger
   useEffect(() => {
@@ -47,22 +56,7 @@ export function FeedPage() {
     return () => observer.disconnect();
   }, [loading, isLoadingMore]);
 
-  const loadMore = async () => {
-    setIsLoadingMore(true);
-
-    // Simulate pagination since your API currently returns full list
-    await new Promise((res) => setTimeout(res, 1000));
-
-    const newPosts = posts.map((post) => ({
-      ...post,
-      id: `${post.id}-page-${page + 1}`,
-    }));
-
-    setLocalPosts((prev) => [...prev, ...newPosts]);
-    setPage((p) => p + 1);
-    setIsLoadingMore(false);
-  };
-
+  
   const handleRefresh = async () => {
     setIsRefreshing(true);
 
