@@ -7,6 +7,9 @@ import { ReelsGridPage } from './components/ReelsGridPage';
 import { ReelsViewer } from './components/ReelsViewer';
 import { Toaster } from './components/ui/sonner';
 import { PostsProvider } from './contexts/PostsContext';
+import { ReelsProvider } from './contexts/ReelsContext';
+import { VideoSoundProvider } from './contexts/VideoSoundContext';
+
 
 
 export default function App() {
@@ -31,6 +34,9 @@ export default function App() {
 
   return (
     <PostsProvider>
+      <ReelsProvider>
+        <VideoSoundProvider>
+    
     <Router>
       <div className="min-h-screen bg-[#0A0A0F]">
         <Routes>
@@ -54,6 +60,8 @@ export default function App() {
         <Toaster />
       </div>
     </Router>
+    </VideoSoundProvider>
+    </ReelsProvider>
     </PostsProvider>
   );
 }

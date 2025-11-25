@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",            // if React 17+ automatic runtime
+    "skipLibCheck": true,         // avoids type noise from node_modules
+    "strict": true,               // optional but recommended
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
