@@ -50,4 +50,4 @@ jobs:
             sudo systemctl reload nginx
 
       - name: ✅ Deployment Finished
-        run: echo "🚀 React app successfully deployed to EC2!"
+        run: echo "React app successfully deployed to EC2"
