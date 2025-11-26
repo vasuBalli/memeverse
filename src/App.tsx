@@ -9,6 +9,7 @@ import { Toaster } from './components/ui/sonner';
 import { PostsProvider } from './contexts/PostsContext';
 import { ReelsProvider } from './contexts/ReelsContext';
 import { VideoSoundProvider } from './contexts/VideoSoundContext';
+import { FeedViewer } from './components/FeedViewer';
 
 
 
@@ -52,6 +53,9 @@ export default function App() {
               <ReelsGridPage />
             </>
           } />
+         
+            <Route path="/feed/:id" element={<FeedViewer />} />
+
           <Route path="/reels/:id" element={<ReelsViewer />} />
           <Route path="/" element={<Navigate to="/feed" replace />} />
           {/* Catch-all route for any unmatched paths */}
