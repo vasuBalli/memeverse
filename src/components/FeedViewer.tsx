@@ -16,15 +16,25 @@ export function FeedViewer() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  // If opened in single mode, the opener passes { single: true, post }
   useEffect(() => {
-    const state = location.state as { posts?: Post[]; initialIndex?: number } | undefined;
+    const state = location.state as { posts?: Post[]; initialIndex?: number; single?: boolean; post?: Post } | undefined;
+    if (state?.single && state.post) {
+      setPosts([state.post]);
+      setCurrentIndex(0);
+      return;
+    }
     const basePosts = state?.posts ?? globalPosts;
     setPosts(basePosts);
   }, [location.state, globalPosts]);
 
   useEffect(() => {
     if (!posts.length) return;
-    const state = location.state as { posts?: Post[]; initialIndex?: number } | undefined;
+    const state = location.state as { posts?: Post[]; initialIndex?: number; single?: boolean } | undefined;
+    if (state?.single) {
+      setCurrentIndex(0);
+      return;
+    }
     if (typeof state?.initialIndex === 'number') {
       setCurrentIndex(state.initialIndex);
       return;
@@ -35,8 +45,11 @@ export function FeedViewer() {
     } else setCurrentIndex(0);
   }, [posts, id, location.state]);
 
-  // Observe for visibility and update current index
+  // If not single mode, set up observer
   useEffect(() => {
+    const state = location.state as { single?: boolean } | undefined;
+    if (state?.single) return; // single mode -> no observer / scroll list
+
     if (!posts.length) return;
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -47,7 +60,8 @@ export function FeedViewer() {
             setCurrentIndex(index);
             const post = posts[index];
             if (post) {
-              window.history.replaceState({ posts, initialIndex: index }, '', `/feed/${post.id}`);
+              // store minimal info only (ids + index) or nothing; keep replaced state small
+              window.history.replaceState({ index }, '', `/feed/${post.id}`);
             }
           }
         });
@@ -57,13 +71,35 @@ export function FeedViewer() {
     const els = containerRef.current?.querySelectorAll('.feed-item');
     els?.forEach((el) => observerRef.current?.observe(el));
     return () => observerRef.current?.disconnect();
-  }, [posts]);
+  }, [posts, location.state]);
 
   useEffect(() => {
     const el = containerRef.current?.querySelector(`[data-index="${currentIndex}"]`);
     el?.scrollIntoView({ behavior: 'auto', block: 'start' });
   }, [currentIndex]);
 
+  // Render single player (standalone) if single mode
+  const state = location.state as { single?: boolean } | undefined;
+  if (state?.single) {
+    // posts[0] exists because we set it in effect above
+    const singlePost = posts[0];
+    if (!singlePost) return null;
+    return (
+      <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+        <FeedPlayer
+          post={singlePost}
+          isActive={true}
+          hasNext={false}
+          hasPrevious={false}
+          onNext={() => {}}
+          onPrevious={() => {}}
+          standalone // new prop that hides caption/tags per requirements
+        />
+      </div>
+    );
+  }
+
+  // Otherwise existing scrollable viewer
   return (
     <div className="fixed inset-0 z-50 bg-black">
       <div ref={containerRef} className="w-full h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth">
