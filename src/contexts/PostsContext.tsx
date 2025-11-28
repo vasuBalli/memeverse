@@ -53,6 +53,9 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
   // deviceId is constant for the client session
   const deviceId = useMemo(() => getDeviceId(), []);
 
+  // prevent duplicate initial fetches when provider remounts or when feed already loaded
+  const initializedRef = useRef(false);
+
   // in-flight request tracking & cancellation
   const inFlightRef = useRef<{ controller?: AbortController; id?: number }>({});
   const requestCounterRef = useRef<number>(0);
@@ -132,6 +135,11 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
 
         setHasMore(normalized.length > 0);
         setPage(pageToLoad);
+
+        // mark initialized when we successfully fetch the first non-append page
+        if (!append) {
+          initializedRef.current = true;
+        }
       } catch (err) {
         if ((err as any)?.name === 'AbortError') {
           // aborted — do nothing
@@ -161,6 +169,8 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
       /* ignore */
     }
     await fetchPosts(1, false);
+    // ensure initialized after an explicit refresh
+    initializedRef.current = true;
   }, [fetchPosts]);
 
   const loadMore = useCallback(async () => {
@@ -170,7 +180,16 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
   }, [fetchPosts, page, loading, hasMore]);
 
   useEffect(() => {
-    // initial load
+    // Only perform the initial fetch if we haven't already initialized.
+    // This avoids refetching when the provider remounts or when navigating back to the feed.
+    if (initializedRef.current) return;
+
+    // If posts are already present (e.g., preserved via provider staying mounted), skip fetch.
+    if (posts.length > 0) {
+      initializedRef.current = true;
+      return;
+    }
+
     fetchPosts(1, false);
 
     return () => {
@@ -181,6 +200,7 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
         /* ignore */
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchPosts]);
 
   // memoize provider value to avoid unnecessary rerenders

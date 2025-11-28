@@ -1,0 +1,117 @@
+/* Plan B: In-flow stacking (drop-in) */
+<div
+  ref={containerRef}
+  className="w-full bg-black flex items-center justify-center overflow-hidden cursor-pointer relative"
+  style={{ height: 480 }}
+  onClick={(e) => { onContainerClick(e); }}
+>
+  <div className="relative flex items-center justify-center w-full h-full">
+    {post.type === 'image' ? (
+      <img
+        src={post.url}
+        alt={post.caption}
+        loading="lazy"
+        className="block max-w-full max-h-full"
+        style={{ width: 'auto', height: '100%', objectFit: 'contain' }}
+      />
+    ) : (
+      <video
+        ref={videoRef}
+        src={shouldLoad ? post.url : undefined}
+        playsInline
+        muted
+        preload="metadata"
+        poster={post.thumbnail}
+        className="block max-w-full max-h-full"
+        style={{ width: 'auto', height: '100%', objectFit: 'contain' }}
+        onClick={(e) => { e.stopPropagation(); onContainerClick(e); }}
+        onTouchStart={() => { if (isTouchDevice) setHover(true); }}
+      />
+    )}
+
+    {post.type === 'video' && (
+      <div
+        className={`absolute inset-0 transition-opacity duration-150 z-10 ${hover ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        role="region"
+        aria-hidden={!hover}
+      >
+        {/* center big play button */}
+        <button
+          aria-label={isPlaying ? 'Pause' : 'Play'}
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePlay(e);
+          }}
+          className="
+            absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+            w-28 h-28
+            rounded-full flex items-center justify-center
+            bg-black/60 backdrop-blur-sm
+            transition-all duration-150 hover:scale-105
+            pointer-events-auto
+          "
+          style={{ border: 'none' }}
+        >
+          {isPlaying ? (
+            <Pause className="w-10 h-10 text-white" />
+          ) : (
+            <Play className="w-12 h-12 text-white" />
+          )}
+        </button>
+
+        {/* ---- IN-FLOW controls (not absolute) ---- */}
+        <div className="absolute left-0 right-0 bottom-0 pointer-events-none"> 
+          {/* keep wrapper absolute to overlay center button but inner rows are in-flow visual stack */}
+          <div className="flex flex-col gap-2 pointer-events-auto">
+            {/* top row: right-aligned small buttons (in flow) */}
+            <div className="flex justify-end items-center px-3">
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={(e) => { e.stopPropagation(); toggleMute(); }} aria-label={isMuted ? 'Unmute' : 'Mute'} aria-pressed={isMuted} className="w-9 h-9 rounded-full flex items-center justify-center">
+                  {isMuted ? <VolumeX className="w-7 h-7" /> : <Volume2 className="w-7 h-7" />}
+                </button>
+
+                <button type="button" onClick={(e) => { e.stopPropagation(); onFullscreenClick(e); }} aria-label="Open player" className="w-9 h-9 rounded-full flex items-center justify-center">
+                  <Maximize2 className="w-7 h-7" />
+                </button>
+
+                <button type="button" onClick={(e) => { e.stopPropagation(); onShareClick(e); }} aria-label="Share" className="w-9 h-9 rounded-full flex items-center justify-center">
+                  <Share2 className="w-7 h-7" />
+                </button>
+              </div>
+            </div>
+
+            {/* bottom row: play / scrub / time */}
+            <div className="flex items-center gap-3 h-16 px-3 pb-2 bg-transparent">
+              <button type="button" onClick={(e) => { e.stopPropagation(); togglePlay(e); }} aria-label={isPlaying ? 'Pause' : 'Play'} aria-pressed={isPlaying} className="w-9 h-9 rounded-full flex items-center justify-center">
+                {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7" />}
+              </button>
+
+              <div className="flex-1 flex items-center">
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={progress}
+                  onMouseDown={(e) => onScrubStart(e as any)}
+                  onTouchStart={(e) => onScrubStart(e as any)}
+                  onChange={(e) => onScrubChange(e as any)}
+                  onMouseUp={(e) => onScrubEnd(e as any)}
+                  onTouchEnd={(e) => onScrubEnd(e as any)}
+                  aria-label="Seek"
+                  className="thin-range w-full"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+
+              <div className="flex-shrink-0 text-xs text-white/80 w-[90px] text-right" aria-live="polite">
+                <span>{formatTimeFromPct(progress)}</span>
+                <span className="mx-1">/</span>
+                <span>{totalDurationText()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</div>

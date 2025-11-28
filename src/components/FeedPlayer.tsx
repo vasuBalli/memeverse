@@ -7,7 +7,7 @@ import { useLazyVideo } from '../hooks/useLazyVideo';
 import { useVideoSound } from '../contexts/VideoSoundContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { TruncatedText } from './TruncatedText';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface FeedPlayerProps {
   post: Post;
@@ -36,9 +36,15 @@ export function FeedPlayer({
   const [uiHidden, setUiHidden] = useState(false);
   const [isLandscape, setIsLandscape] = useState(false);
 
+  const hideTimeoutRef = useRef<number | null>(null);
+  const isScrubbingRef = useRef(false);
+  const lastTimeUpdateRef = useRef(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
-  const location = useLocation();
+
+  const isTouchDevice =
+    typeof window !== 'undefined' &&
+    ('ontouchstart' in window || (window.matchMedia && window.matchMedia('(hover: none)').matches));
 
   // autoplay/pause when active
   useEffect(() => {
@@ -52,6 +58,11 @@ export function FeedPlayer({
         if (isActive) {
           setIsPlaying(true);
           await v.play().catch(() => {});
+          // hide controls automatically on touch
+          if (isTouchDevice) {
+            if (hideTimeoutRef.current) window.clearTimeout(hideTimeoutRef.current);
+            hideTimeoutRef.current = window.setTimeout(() => setUiHidden(true), 2000);
+          }
         } else {
           v.pause();
           setIsPlaying(false);
@@ -61,33 +72,37 @@ export function FeedPlayer({
     startPlay();
 
     return () => {
-      try {
-        v.pause();
-        announcePause(post.id);
-      } catch {}
+      try { v.pause(); announcePause(post.id); } catch {}
+      if (hideTimeoutRef.current) { window.clearTimeout(hideTimeoutRef.current); hideTimeoutRef.current = null; }
     };
-  }, [isActive, post.id, announcePlay, announcePause, isMuted, videoRef, post.type]);
+  }, [isActive, post.id, announcePlay, announcePause, isMuted, videoRef.current, post.type, isTouchDevice]);
 
-  // progress
+  // Attach timeupdate with throttling
   useEffect(() => {
     const v = videoRef.current;
     if (!v || post.type !== 'video') return;
+
     const onTime = () => {
+      const now = performance.now();
+      if (now - lastTimeUpdateRef.current < 150) return;
+      lastTimeUpdateRef.current = now;
+
       if (!v.duration || Number.isNaN(v.duration)) {
         setProgress(0);
         return;
       }
-      setProgress((v.currentTime / v.duration) * 100);
+      if (!isScrubbingRef.current) {
+        setProgress((v.currentTime / v.duration) * 100);
+      }
     };
     v.addEventListener('timeupdate', onTime);
     return () => v.removeEventListener('timeupdate', onTime);
-  }, [videoRef, post.type]);
+  }, [videoRef.current, post.type]);
 
   // keyboard: space toggles play/pause when container focused
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
-        // only when focus is inside container
         if (!containerRef.current) return;
         const active = document.activeElement;
         if (!containerRef.current.contains(active)) return;
@@ -98,32 +113,32 @@ export function FeedPlayer({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerRef, videoRef, post.id, announcePlay, announcePause]);
+  }, [containerRef, videoRef.current, post.id]);
 
   // toggle UI hidden - also hide page scrollbars
   const toggleUiHidden = useCallback(() => {
     setUiHidden((prev) => {
       const next = !prev;
-      try {
-        document.body.style.overflow = next ? 'hidden' : '';
-      } catch {}
+      try { document.body.style.overflow = next ? 'hidden' : ''; } catch {}
       return next;
     });
   }, []);
 
-  // single tap on video toggles UI (only for video)
-  const onVideoTap = () => {
-    if (post.type !== 'video') return;
-    toggleUiHidden();
-  };
+  // show controls temporarily on touch
+  const showControlsTemporarily = useCallback(() => {
+    if (!isTouchDevice) return;
+    setUiHidden(false);
+    if (hideTimeoutRef.current) window.clearTimeout(hideTimeoutRef.current);
+    hideTimeoutRef.current = window.setTimeout(() => setUiHidden(true), 2000);
+  }, [isTouchDevice]);
 
   // fullscreen / landscape (standalone behaves as back)
   const handleLandscape = async () => {
     if (standalone) {
+      // navigate back — FeedCard saved index before opening
       navigate(-1);
       return;
     }
-
     const el = containerRef.current;
     if (!el) return;
     try {
@@ -139,14 +154,13 @@ export function FeedPlayer({
 
   useEffect(() => {
     const onFsChange = () => {
-      const isFs = !!document.fullscreenElement;
-      setIsLandscape(isFs);
+      setIsLandscape(!!document.fullscreenElement);
     };
     window.addEventListener('fullscreenchange', onFsChange);
     return () => window.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // play/pause toggle (reused by keyboard handler)
+  // toggle play/pause via controls (no single-click on video per requirement)
   const togglePlay = useCallback(async () => {
     const v = videoRef.current;
     if (!v || post.type !== 'video') return;
@@ -154,17 +168,26 @@ export function FeedPlayer({
       await announcePlay(post.id, v);
       v.play().catch(() => {});
       setIsPlaying(true);
+      if (isTouchDevice) {
+        if (hideTimeoutRef.current) window.clearTimeout(hideTimeoutRef.current);
+        hideTimeoutRef.current = window.setTimeout(() => setUiHidden(true), 2000);
+      }
     } else {
       v.pause();
       announcePause(post.id);
       setIsPlaying(false);
+      if (isTouchDevice) {
+        setUiHidden(false);
+        if (hideTimeoutRef.current) { window.clearTimeout(hideTimeoutRef.current); hideTimeoutRef.current = null; }
+      }
     }
-  }, [videoRef, post.id, announcePlay, announcePause, post.type]);
+  }, [videoRef.current, post.id, announcePlay, announcePause, post.type, isTouchDevice]);
 
-  // download
-  const handleDownload = async () => {
+  // download with fallback
+  const handleDownload = useCallback(async () => {
     try {
       const res = await fetch(post.url);
+      if (!res.ok) throw new Error('fetch failed');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -176,22 +199,37 @@ export function FeedPlayer({
       setTimeout(() => window.URL.revokeObjectURL(url), 1500);
       toast.success('Download started!');
     } catch {
-      toast.error('Download failed');
+      try {
+        window.open(post.url, '_blank');
+        toast.info('Opened media in a new tab (use browser download there).');
+      } catch {
+        toast.error('Download failed');
+      }
     }
-  };
+  }, [post.id, post.url, post.type]);
 
-  // scrub
-  const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // scrub handlers
+  const handleScrubStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    isScrubbingRef.current = true;
+  };
+  const handleScrubEnd = (e: React.MouseEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    isScrubbingRef.current = false;
+    const pct = Number((e.target as HTMLInputElement).value);
     const v = videoRef.current;
-    if (!v || post.type !== 'video') return;
-    const pct = Number(e.target.value);
-    if (!v.duration || Number.isNaN(v.duration)) return;
+    if (!v || !v.duration || Number.isNaN(v.duration)) return;
     v.currentTime = (pct / 100) * v.duration;
+    setProgress(pct);
+  };
+  const handleScrub = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    const pct = Number(e.target.value);
     setProgress(pct);
   };
 
   // share
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     const url = window.location.href;
     try {
       if (navigator.clipboard?.writeText) {
@@ -209,9 +247,8 @@ export function FeedPlayer({
     } catch {
       toast.error('Share failed');
     }
-  };
+  }, []);
 
-  // helper: format combined time
   const getTimeText = () => {
     const v = videoRef.current;
     if (!v || !v.duration || Number.isNaN(v.duration)) return '0:00 / 0:00';
@@ -225,24 +262,12 @@ export function FeedPlayer({
     return `${fmt(cur)} / ${fmt(total)}`;
   };
 
-  // helper: current time only (for left when needed)
-  const getCurrentOnly = () => {
-    const v = videoRef.current;
-    if (!v || !v.duration || Number.isNaN(v.duration)) return '0:00';
-    const cur = Math.floor((progress / 100) * v.duration);
-    const m = Math.floor(cur / 60);
-    const s = Math.floor(cur % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
-
   return (
     <div
       ref={containerRef}
       className={`relative w-full h-full bg-black flex items-center justify-center ${isLandscape ? 'feedplayer-landscape' : ''}`}
-      onClick={() => {
-        /* do nothing - controls handle propagation */
-      }}
-      tabIndex={0} // allow focus so space works
+      tabIndex={0}
+      onClick={() => { if (isTouchDevice) showControlsTemporarily(); }}
     >
       <div className="relative w-full h-full max-w-[900px] mx-auto">
         {post.type === 'image' ? (
@@ -255,96 +280,53 @@ export function FeedPlayer({
             playsInline
             preload="metadata"
             muted={isMuted}
-            onClick={(e) => {
-              e.stopPropagation();
-              onVideoTap();
-            }}
+            // intentionally no onClick toggling
           />
         )}
 
-        {/* Controls overlay (visible unless uiHidden) */}
-        <div
-          className={`absolute inset-0 transition-opacity duration-200 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}
-        >
-          {/* Bottom area containing scrubber, time, and controls */}
-          <div className="absolute left-0 right-0 bottom-0 px-3">
-            {/* Scrubber row: play/pause at left, thin scrub, time at right */}
-            <div className="flex items-center gap-3">
-              {/* play/pause at left */}
-              <div className="flex-shrink-0">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    togglePlay();
-                  }}
-                  aria-label={isPlaying ? 'Pause' : 'Play'}
-                  className="w-9 h-9 rounded-full glass flex items-center justify-center"
-                >
-                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+        {/* Controls overlay (match FeedCard behavior/layout) */}
+        {post.type === 'video' && (
+          <div className={`absolute inset-0 transition-opacity duration-200 ${uiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'}`} aria-hidden={uiHidden}>
+            {/* center transparent area */}
+            <button aria-label={isPlaying ? 'Pause' : 'Play'} onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full flex items-center justify-center" style={{ background: 'transparent', border: 'none' }} />
+
+            <div className="absolute left-0 right-0 bottom-0 px-3">
+              <div className="mt-2 flex items-center justify-end left-5 gap-2 pr-1">
+                <button onClick={(e) => { e.stopPropagation(); toggleMute(); }} aria-label={isMuted ? 'Unmute' : 'Mute'} className="w-9 h-9 rounded-full glass flex items-center justify-center">
+                  {isMuted ? <VolumeX className="w-7 h-7" /> : <Volume2 className="w-7 h-7" />}
+                </button>
+                
+
+                <button onClick={(e) => { e.stopPropagation(); handleLandscape(); }} aria-label="Landscape / Fullscreen" className="w-9 h-9 rounded-full glass flex items-center justify-center">
+                  <Maximize2 className="w-7 h-7" />
+                </button>
+
+                <button onClick={(e) => { e.stopPropagation(); handleShare(); }} aria-label="Share" className="w-9 h-9 rounded-full glass flex items-center justify-center">
+                  <Share2 className="w-7 h-7" />
                 </button>
               </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); togglePlay(); }} aria-label={isPlaying ? 'Pause' : 'Play'} className="w-9 h-9 rounded-full glass flex items-center justify-center">
+                    {isPlaying ? <Pause className="w-7 h-7" /> : <Play className="w-7 h-7" />}
+                  </button>
+                </div>
 
-              {/* thinner scrubber */}
-              <div className="flex-1">
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={progress}
-                  onChange={(e) => {
-                    e.stopPropagation();
-                    handleScrub(e);
-                  }}
-                  aria-label="Seek"
-                  className="thin-range w-full"
-                />
+                <div className="flex-1">
+                  <input type="range" min={0} max={100} value={progress} onMouseDown={(e) => handleScrubStart(e)} onTouchStart={(e) => handleScrubStart(e as any)} onChange={(e) => handleScrub(e)} onMouseUp={(e) => handleScrubEnd(e as any)} onTouchEnd={(e) => handleScrubEnd(e as any)} aria-label="Seek" className="thin-range w-full" onClick={(e) => e.stopPropagation()} />
+                </div>
+
+                <div className="flex-shrink-0 text-xs text-white/80 w-[110px] text-right">
+                  {getTimeText()}
+                </div>
               </div>
 
-              {/* combined timer current / total */}
-              <div className="flex-shrink-0 text-xs text-white/80 w-[110px] text-right">
-                {getTimeText()}
-              </div>
-            </div>
-
-            {/* Buttons row below scrubber: right: mute, fullscreen, share */}
-            <div className="mt-2 flex items-center justify-end left-5 gap-2 pr-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleMute();
-                }}
-                aria-label={isMuted ? 'Unmute' : 'Mute'}
-                className="w-9 h-9 rounded-full glass flex items-center justify-center"
-              >
-                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleLandscape();
-                }}
-                aria-label="Landscape / Fullscreen"
-                className="w-9 h-9 rounded-full glass flex items-center justify-center"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleShare();
-                }}
-                aria-label="Share"
-                className="w-9 h-9 rounded-full glass flex items-center justify-center"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
+              
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Optional caption area (hidden in standalone) */}
         {!standalone && (
           <div className="absolute bottom-24 left-6 right-6 pointer-events-none">
             <div className="pointer-events-auto">
@@ -367,27 +349,9 @@ export function FeedPlayer({
       </div>
 
       <style>{`
-        .thin-range {
-          -webkit-appearance: none;
-          appearance: none;
-          height: 4px;
-          background: rgba(255,255,255,0.12);
-          border-radius: 999px;
-        }
-        .thin-range::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: #6C5CE7;
-          box-shadow: 0 0 0 6px rgba(108,92,231,0.12);
-        }
-        .thin-range::-moz-range-thumb {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: #6C5CE7;
-        }
+        .thin-range { -webkit-appearance: none; appearance: none; height: 4px; background: rgba(255,255,255,0.12); border-radius: 999px; vertical-align: middle; }
+        .thin-range::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: #6C5CE7; box-shadow: 0 0 0 6px rgba(108,92,231,0.12); }
+        .thin-range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: #6C5CE7; }
         .feedplayer-landscape { transform: rotate(0deg); }
         .feedplayer-landscape .max-w-[900px] { width: 100vw; height: 100vh; }
       `}</style>
