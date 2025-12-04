@@ -34,6 +34,9 @@ interface ApiPost {
   created_at: string;
   type: 'image' | 'video';
   language: string;
+  thumbnail? : string;
+  poster?: string;    // <-- optional, for video poster frame
+  lqip?: string;      // <-- optional tiny placeholder/base64
 }
 interface ApiResponse {
   status: string;
@@ -71,18 +74,14 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
         url: apiPost.file_url,
         images: undefined,
         aspectRatio: undefined,
-        thumbnail: undefined,
+        thumbnail: apiPost.thumbnail ?? undefined, // map thumbnail from API
+      poster: apiPost.poster ?? undefined,       // optional poster for video
+      lqip: apiPost.lqip ?? undefined,           // optional tiny placeholder
         caption: apiPost.title,
-        tags: apiPost.tags
-          ? Array.from(
-              new Set(
-                apiPost.tags
-                  .split(',')
-                  .map((t) => t.trim())
-                  .filter(Boolean)
-              )
-            )
+                tags: Array.isArray(apiPost.tags)
+          ? Array.from(new Set(apiPost.tags))
           : [],
+
         deviceId,
         likes: 0,
         comments: 0,
