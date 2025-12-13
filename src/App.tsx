@@ -7,6 +7,7 @@ import { ReelsGridPage } from './components/ReelsGridPage';
 import { ReelsViewer } from './components/ReelsViewer';
 import { Toaster } from './components/ui/sonner';
 import { PostsProvider } from './contexts/PostsContext';
+import SinglePostPage from './components/SinglePostPage';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -45,6 +46,10 @@ export default function App() {
               <ReelsGridPage />
             </>
           } />
+          <Route path="/p" element={<SinglePostPage />} />
+
+
+
           <Route path="/reels/:id" element={<ReelsViewer />} />
           <Route path="/" element={<Navigate to="/feed" replace />} />
           {/* Catch-all route for any unmatched paths */}

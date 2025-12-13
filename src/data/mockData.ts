@@ -12,6 +12,7 @@ export interface Post {
   comments: number;
   shares: number;
   views: number;
+  lqip?:string;
 }
 
 export const mockPosts: Post[] = []

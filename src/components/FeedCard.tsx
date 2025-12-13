@@ -2,12 +2,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Post, formatNumber } from '../data/mockData';
-import { Download, Share2, Volume2, VolumeX, Maximize2, Play, Bookmark } from 'lucide-react';
+import { Download, Share2, Volume2, VolumeX, Maximize2, Play, Bookmark, Heart, MoreVertical } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ImageCarousel } from './ImageCarousel';
 import { FullscreenVideoModal } from './FullscreenVideoModal';
 import { Slider } from './ui/slider';
 import { toast } from 'sonner';
+
 
 interface FeedCardProps {
   post: Post;
@@ -16,9 +17,18 @@ interface FeedCardProps {
 }
 
 function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
+
+  const caption = post.caption ?? '';
+
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+
+  const [showMenu, setShowMenu] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+
+
 
   // only load media (assign video src / let image load) when card near viewport
   const [loadMedia, setLoadMedia] = useState(false);
@@ -42,8 +52,10 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibilityObserverRef = useRef<IntersectionObserver | null>(null);
 
-  const CHAR_LIMIT = 300;
-  const shouldTruncate = post.caption.length > CHAR_LIMIT;
+  const CHAR_LIMIT = 15;
+  // const shouldTruncate = post.caption.length > CHAR_LIMIT;
+  const shouldTruncate = caption.length > CHAR_LIMIT;
+
   const hasTags = !!(post.tags && post.tags.length);
 
   // Observe the card container and enable media loading when within rootMargin
@@ -241,13 +253,22 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
     [post.id, post.type, post.url]
   );
 
+  const handleLike = () => {
+  setIsLiked((prev) => !prev);
+};
+
+
   const handleShare = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
-      const url = `${window.location.origin}/reels/${post.id}`;
+      // const url = `${window.location.origin}/feed/${post.id}`;
+      // const url = `${window.location.origin}/api/post-details/?post_id=${post.id}`;
+
+      const url = `${window.location.origin}/p?post_id=${post.id}`;
+
       try {
         if (navigator.share) {
-          await navigator.share({ url, title: post.caption });
+          await navigator.share({ url, title: caption });
           toast.success('Shared!');
         } else if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(url);
@@ -265,7 +286,7 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
         toast.error('Unable to share. Try copying the link manually.');
       }
     },
-    [post.id, post.caption]
+    [post.id, caption]
   );
 
   const handleBookmark = useCallback(
@@ -300,17 +321,58 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
           <p className="text-sm">Device {post.deviceId}</p>
           <p className="text-xs text-[#6B6B7B]">{formatNumber(post.views)} views</p>
         </div>
+        {/* Right Actions */}
+  <div className="ml-auto flex absolute items-center right-0 gap-1">
+    {/* Download */}
+    <button
+      onClick={handleDownload}
+      className="p-2 rounded-full text-[#6B6B7B] hover:text-[#00A8FF] hover:bg-white/5 transition"
+      title="Download"
+    >
+      <Download className="w-5 h-5" />
+    </button>
+
+    {/* More Menu */}
+    <div className="relative">
+      <button
+        onClick={() => setShowMenu((prev) => !prev)}
+        className="p-2 rounded-full text-[#6B6B7B] hover:text-white hover:bg-white/5 transition"
+        title="More"
+      >
+        <MoreVertical className="w-5 h-5" />
+      </button>
+
+      {/* Dropdown */}
+      {showMenu && (
+        <div className="absolute right-0 mt-2 w-36 rounded-xl bg-[#1E1E2E] border border-white/10 shadow-xl overflow-hidden z-50">
+          <button
+            // onClick={handleHide}
+            className="w-full text-left px-4 py-2 text-sm text-gray-200 hover:bg-white/5 transition"
+          >
+            Hide
+          </button>
+
+          <button
+            // onClick={handleReport}
+            className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition"
+          >
+            Report
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
       </div>
 
       {/* Media */}
       {post.type === 'image' ? (
         post.images && post.images.length > 0 ? (
-          <ImageCarousel images={post.images} alt={post.caption} />
+          <ImageCarousel images={post.images} alt={caption} />
         ) : (
           <div className="relative aspect-[4/5] bg-[#0A0A0F] overflow-hidden">
             <ImageWithFallback
               src={post.thumbnail || post.url}
-              alt={post.caption}
+              alt={caption}
               className="w-full h-full object-cover"
               loading="lazy"
               lqip={post.lqip || undefined}
@@ -392,31 +454,56 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-3 px-4 pb-2">
-        <button
-          onClick={handleBookmark}
-          className={`flex items-center gap-2 text-sm transition-colors p-2 ${isBookmarked ? 'text-[#00A8FF]' : 'text-[#6B6B7B] hover:text-[#00A8FF]'}`}
-          title="Bookmark"
-        >
-          <Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-[#00A8FF]' : ''}`} />
-        </button>
+        <div className="flex items-center justify-between px-4 pb-2">
+          {/* Left: Like */}
+          <button
+            onClick={handleLike}
+            className={`flex items-center gap-2 p-2 text-sm transition-colors ${
+              isLiked
+                ? 'text-pink-500'
+                : 'text-[#6B6B7B] hover:text-pink-400'
+            }`}
+            title="Like"
+          >
+            <Heart
+              className={`w-5 h-5 ${
+                isLiked ? 'fill-pink-500' : ''
+              }`}
+            />
+            <span className="text-xs font-medium">
+              {formatNumber(post.likes || 0)}
+            </span>
+          </button>
 
-        <button
-          onClick={handleShare}
-          className="flex items-center gap-2 text-sm text-[#6B6B7B] hover:text-[#6C5CE7] transition-colors p-2"
-          title="Share"
-        >
-          <Share2 className="w-5 h-5" />
-        </button>
+            {/* Right: Other actions */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleBookmark}
+                className={`p-2 transition-colors ${
+                  isBookmarked
+                    ? 'text-[#00A8FF]'
+                    : 'text-[#6B6B7B] hover:text-[#00A8FF]'
+                }`}
+                title="Bookmark"
+              >
+                <Bookmark
+                  className={`w-5 h-5 ${
+                    isBookmarked ? 'fill-[#00A8FF]' : ''
+                  }`}
+                />
+              </button>
 
-        <button
-          onClick={handleDownload}
-          className="flex items-center gap-2 text-sm text-[#6B6B7B] hover:text-[#00A8FF] transition-colors p-2"
-          title="Download"
-        >
-          <Download className="w-5 h-5" />
-        </button>
-      </div>
+                <button
+                  onClick={handleShare}
+                  className="p-2 text-[#6B6B7B] hover:text-[#6C5CE7] transition-colors"
+                  title="Share"
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+      
 
       {/* Caption & Tags */}
       <div className="px-4 py-3">
@@ -424,7 +511,7 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
           {shouldTruncate && !showFullCaption ? (
             <div className="relative">
               <div className="overflow-hidden line-clamp-2">
-                <span className="leading-relaxed">{post.caption}</span>
+                <span className="leading-relaxed">{caption}</span>
               </div>
               <button onClick={() => setShowFullCaption(true)} className="text-[#6B6B7B] hover:text-[#6C5CE7] text-xs mt-1 font-medium">
                 See more
@@ -432,7 +519,7 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
             </div>
           ) : (
             <>
-              <div className="mb-2 leading-relaxed">{post.caption}</div>
+              <div className="mb-2 leading-relaxed">{caption}</div>
               {hasTags && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {post.tags?.map((tag) => (
@@ -446,6 +533,7 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
           )}
         </div>
       </div>
+      
 
       {/* Fullscreen Video Modal */}
       {post.type === 'video' && (
