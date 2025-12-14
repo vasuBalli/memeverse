@@ -40,6 +40,7 @@ export default function SinglePostPage() {
           shares: 0,
           deviceId: data.user_name ?? 'Unknown',
           lqip: undefined,
+            // is_liked: data.is_liked ?? false
         };
 
         setPost(normalizedPost);

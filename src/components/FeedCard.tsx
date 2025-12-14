@@ -1,13 +1,14 @@
 // FeedCard.tsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Post, formatNumber } from '../data/mockData';
+import { Post, formatNumber} from '../data/mockData';
 import { Download, Share2, Volume2, VolumeX, Maximize2, Play, Bookmark, Heart, MoreVertical } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ImageCarousel } from './ImageCarousel';
 import { FullscreenVideoModal } from './FullscreenVideoModal';
 import { Slider } from './ui/slider';
 import { toast } from 'sonner';
+import {getDeviceId} from '../components/utils/deviceId'
 
 
 interface FeedCardProps {
@@ -26,7 +27,15 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
 
 
   const [showMenu, setShowMenu] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
+  
+  const [isLiked, setIsLiked] = useState<boolean>(() => {
+  return Boolean((post as any).is_liked);
+});
+
+const [likeCount, setLikeCount] = useState<number>(
+  post.likes ?? 0
+);
+
 
 
 
@@ -253,9 +262,33 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
     [post.id, post.type, post.url]
   );
 
-  const handleLike = () => {
-  setIsLiked((prev) => !prev);
+
+  const handleLike = async () => {
+  const deviceId = getDeviceId();
+  const prevLiked = isLiked;
+
+  // ✅ Optimistic UI
+  setIsLiked(!prevLiked);
+  setLikeCount((c) => (prevLiked ? c - 1 : c + 1));
+
+  try {
+    await fetch('/api/like', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        meme_id: post.id,
+        device_id: deviceId,
+      }),
+    });
+  } catch (err) {
+    // ❌ Rollback if API fails
+    setIsLiked(prevLiked);
+    setLikeCount((c) => (prevLiked ? c + 1 : c - 1));
+  }
 };
+
 
 
   const handleShare = useCallback(
@@ -471,7 +504,7 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
               }`}
             />
             <span className="text-xs font-medium">
-              {formatNumber(post.likes || 0)}
+              {formatNumber(likeCount)}
             </span>
           </button>
 
