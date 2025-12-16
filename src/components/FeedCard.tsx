@@ -263,16 +263,44 @@ const [likeCount, setLikeCount] = useState<number>(
   );
 
 
-  const handleLike = async () => {
+//   const handleLike = async () => {
+//   const deviceId = getDeviceId();
+//   const prevLiked = isLiked;
+
+//   // ✅ Optimistic UI
+//   setIsLiked(!prevLiked);
+//   setLikeCount((c) => (prevLiked ? c - 1 : c + 1));
+
+//   try {
+//     await fetch('/api/like', {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify({
+//         meme_id: post.id,
+//         device_id: deviceId,
+//       }),
+//     });
+//   } catch (err) {
+//     // ❌ Rollback if API fails
+//     setIsLiked(prevLiked);
+//     setLikeCount((c) => (prevLiked ? c + 1 : c - 1));
+//   }
+// };
+
+
+const handleLike = async () => {
   const deviceId = getDeviceId();
   const prevLiked = isLiked;
+  const prevCount = likeCount;
 
   // ✅ Optimistic UI
   setIsLiked(!prevLiked);
   setLikeCount((c) => (prevLiked ? c - 1 : c + 1));
 
   try {
-    await fetch('/api/like', {
+    const res = await fetch('/api/like/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -282,10 +310,22 @@ const [likeCount, setLikeCount] = useState<number>(
         device_id: deviceId,
       }),
     });
+
+    if (!res.ok) {
+      throw new Error('Like API failed');
+    }
+
+    const data = await res.json();
+
+    // ✅ TRUST BACKEND (single source of truth)
+    setIsLiked(Boolean(data.liked));
+    setLikeCount(Number(data.likes_count));
   } catch (err) {
-    // ❌ Rollback if API fails
+    console.error('Like failed', err);
+
+    // ❌ Rollback on failure
     setIsLiked(prevLiked);
-    setLikeCount((c) => (prevLiked ? c + 1 : c - 1));
+    setLikeCount(prevCount);
   }
 };
 
@@ -348,10 +388,10 @@ const [likeCount, setLikeCount] = useState<number>(
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#6C5CE7] to-[#00A8FF] flex items-center justify-center">
-          <span className="text-xs">{post.deviceId.slice(-2)}</span>
+          <span className="text-xs">{post.title.slice(-2)}</span>
         </div>
         <div>
-          <p className="text-sm">Device {post.deviceId}</p>
+          <p className="text-sm">Device {post.username}</p>
           <p className="text-xs text-[#6B6B7B]">{formatNumber(post.views)} views</p>
         </div>
         {/* Right Actions */}

@@ -10,7 +10,10 @@ import React, {
   ReactNode,
   FC,
 } from 'react';
-import { Post, getDeviceId } from '../data/mockData';
+import { Post } from '../data/mockData';
+import { useDevice } from './DeviceContext';
+
+/* ---------- Types ---------- */
 
 interface PostsDataValue {
   posts: Post[];
@@ -24,27 +27,27 @@ interface PostsActionsValue {
   loadMore: () => Promise<void>;
 }
 
-/* Api interfaces unchanged */
 interface ApiPost {
   id: number;
   title: string;
   file_url: string;
-  tags: string;
+  tags: string[];
   user_name: string;
   created_at: string;
   type: 'image' | 'video';
   language: string;
-  thumbnail? : string;
-  poster?: string;    // <-- optional, for video poster frame
-  lqip?: string;      // <-- optional tiny placeholder/base64
+  thumbnail?: string;
+  poster?: string;
+  lqip?: string;
 }
+
 interface ApiResponse {
   status: string;
   data: ApiPost[];
-  next_cursor?: string | null;
 }
 
-/* Create two separate contexts */
+/* ---------- Contexts ---------- */
+
 const PostsDataContext = createContext<PostsDataValue | undefined>(undefined);
 const PostsActionsContext = createContext<PostsActionsValue | undefined>(undefined);
 
@@ -52,53 +55,58 @@ interface PostsProviderProps {
   children: ReactNode;
 }
 
-export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
-  /* --- state (same as before) --- */
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<number>(1);
-  const [hasMore, setHasMore] = useState<boolean>(true);
+/* ---------- Provider ---------- */
 
-  const deviceId = useMemo(() => getDeviceId(), []);
+export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+
+  // ✅ deviceId ONLY for API
+  const { deviceId, isNewDevice } = useDevice();
 
   const initializedRef = useRef(false);
+  const requestCounterRef = useRef(0);
   const inFlightRef = useRef<{ controller?: AbortController; id?: number }>({});
-  const requestCounterRef = useRef<number>(0);
 
-  const normalizePosts = useCallback(
-    (data: ApiPost[]): Post[] => {
-      return data.map((apiPost) => ({
-        id: String(apiPost.id),
-        type: apiPost.type,
-        url: apiPost.file_url,
-        images: undefined,
-        aspectRatio: undefined,
-        thumbnail: apiPost.thumbnail ?? undefined, // map thumbnail from API
-      poster: apiPost.poster ?? undefined,       // optional poster for video
-      lqip: apiPost.lqip ?? undefined,           // optional tiny placeholder
-        caption: apiPost.title,
-                tags: Array.isArray(apiPost.tags)
-          ? Array.from(new Set(apiPost.tags))
-          : [],
+  /* ---------- Normalizer ---------- */
+  const normalizePosts = useCallback((data: ApiPost[]): Post[] => {
+    return data.map((apiPost) => ({
+      id: String(apiPost.id),
+      type: apiPost.type,
+      url: apiPost.file_url,
+      title: apiPost.title,
 
-        deviceId,
-        likes: 0,
-        comments: 0,
-        shares: 0,
-        views: 0,
-      }));
-    },
-    [deviceId]
-  );
+      // ✅ Frontend uses username
+      username: apiPost.user_name ?? 'Unknown',
+
+      images: [],
+      aspectRatio: undefined,
+      thumbnail: apiPost.thumbnail,
+      poster: apiPost.poster,
+      lqip: apiPost.lqip,
+
+      caption: apiPost.title ?? '',
+      tags: Array.isArray(apiPost.tags) ? apiPost.tags : [],
+
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      views: 0,
+    }));
+  }, []);
 
   const safeSetPosts = useCallback((updater: (prev: Post[]) => Post[]) => {
     setPosts((prev) => updater(prev));
   }, []);
 
-  /* --- fetch logic (unchanged) --- */
+  /* ---------- Fetch Posts ---------- */
   const fetchPosts = useCallback(
     async (pageToLoad: number, append: boolean) => {
+      if (!deviceId) return;
+
       const requestId = ++requestCounterRef.current;
       const controller = new AbortController();
       inFlightRef.current = { controller, id: requestId };
@@ -107,31 +115,30 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(`/api/feed/?page=${pageToLoad}`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Device-Id': deviceId,
-          },
+        // ✅ Send device_id ONLY for first-time user
+        const url = isNewDevice
+          ? `/api/feed/?page=${pageToLoad}&device_id=${deviceId}`
+          : `/api/feed/?page=${pageToLoad}`;
+
+        const res = await fetch(url, {
+          headers: { 'Content-Type': 'application/json' },
           signal: controller.signal,
         });
 
         if (!res.ok) {
           const text = await res.text().catch(() => '');
-          throw new Error(`Failed to fetch posts: ${res.status} ${res.statusText} ${text}`);
+          throw new Error(`Failed to fetch posts: ${res.status} ${text}`);
         }
 
         const response: ApiResponse = await res.json();
-        const data = response.data ?? [];
-
-        const normalized = normalizePosts(data);
+        const normalized = normalizePosts(response.data ?? []);
 
         safeSetPosts((prev) => {
           if (!append) return normalized;
 
           const existingIds = new Set(prev.map((p) => p.id));
           const filtered = normalized.filter((p) => !existingIds.has(p.id));
-          if (filtered.length === 0) return prev;
-          return [...prev, ...filtered];
+          return filtered.length ? [...prev, ...filtered] : prev;
         });
 
         setHasMore(normalized.length > 0);
@@ -141,12 +148,9 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
           initializedRef.current = true;
         }
       } catch (err) {
-        if ((err as any)?.name === 'AbortError') {
-          return;
-        }
-        const message = err instanceof Error ? err.message : 'Unknown error while fetching posts';
+        if ((err as any)?.name === 'AbortError') return;
+        const message = err instanceof Error ? err.message : 'Unknown error';
         setError(message);
-        // eslint-disable-next-line no-console
         console.error('PostsProvider.fetchPosts error:', message);
       } finally {
         if (inFlightRef.current.id === requestId) {
@@ -155,41 +159,32 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
         }
       }
     },
-    [deviceId, normalizePosts, safeSetPosts]
+    [deviceId, isNewDevice, normalizePosts, safeSetPosts]
   );
 
-  /* --- actions (same API) --- */
+  /* ---------- Actions ---------- */
+
   const refresh = useCallback(async () => {
-    try {
-      inFlightRef.current.controller?.abort();
-    } catch (_) {}
+    inFlightRef.current.controller?.abort();
+    initializedRef.current = false;
     await fetchPosts(1, false);
-    initializedRef.current = true;
   }, [fetchPosts]);
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return;
-    const nextPage = page + 1;
-    await fetchPosts(nextPage, true);
+    await fetchPosts(page + 1, true);
   }, [fetchPosts, page, loading, hasMore]);
 
-  /* --- initial fetch --- */
+  /* ---------- Initial Fetch (ONLY ONCE) ---------- */
   useEffect(() => {
+    if (!deviceId) return;
     if (initializedRef.current) return;
-    if (posts.length > 0) {
-      initializedRef.current = true;
-      return;
-    }
-    fetchPosts(1, false);
-    return () => {
-      try {
-        inFlightRef.current.controller?.abort();
-      } catch (_) {}
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchPosts]);
 
-  /* --- memoized context values (split) --- */
+    fetchPosts(1, false);
+  }, [deviceId, fetchPosts]);
+
+  /* ---------- Context Values ---------- */
+
   const dataValue = useMemo(
     () => ({ posts, loading, error, hasMore }),
     [posts, loading, error, hasMore]
@@ -209,30 +204,20 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
   );
 };
 
-/* --- hooks for consumers --- */
+/* ---------- Hooks ---------- */
 
 export const usePostsData = (): PostsDataValue => {
   const ctx = useContext(PostsDataContext);
-  if (!ctx) {
-    throw new Error('usePostsData must be used within a PostsProvider');
-  }
+  if (!ctx) throw new Error('usePostsData must be used within PostsProvider');
   return ctx;
 };
 
 export const usePostsActions = (): PostsActionsValue => {
   const ctx = useContext(PostsActionsContext);
-  if (!ctx) {
-    throw new Error('usePostsActions must be used within a PostsProvider');
-  }
+  if (!ctx) throw new Error('usePostsActions must be used within PostsProvider');
   return ctx;
 };
 
-/**
- * Backward-compatible: returns combined shape.
- * Prefer usePostsData/usePostsActions in performance-sensitive components.
- */
 export const usePosts = (): PostsDataValue & PostsActionsValue => {
-  const data = usePostsData();
-  const actions = usePostsActions();
-  return { ...data, ...actions };
+  return { ...usePostsData(), ...usePostsActions() };
 };

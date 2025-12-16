@@ -8,6 +8,11 @@ import { ReelsViewer } from './components/ReelsViewer';
 import { Toaster } from './components/ui/sonner';
 import { PostsProvider } from './contexts/PostsContext';
 import SinglePostPage from './components/SinglePostPage';
+import { getDeviceId } from './components/utils/deviceId';
+
+import { DeviceProvider} from './contexts/DeviceContext';
+
+
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -25,11 +30,13 @@ export default function App() {
     }
   }, []);
 
+
   if (showSplash) {
     return <WelcomeSplash />;
   }
 
   return (
+    <DeviceProvider>
     <PostsProvider>
     <Router>
       <div className="min-h-screen bg-[#0A0A0F]">
@@ -59,5 +66,7 @@ export default function App() {
       </div>
     </Router>
     </PostsProvider>
+    </DeviceProvider>
+   
   );
 }

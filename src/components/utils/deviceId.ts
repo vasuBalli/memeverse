@@ -12,3 +12,20 @@ export function getDeviceId(): string {
 
   return deviceId;
 }
+
+
+// export function getDeviceId(): {
+//   id: string;
+//   isNew: boolean;
+// } {
+//   let deviceId = localStorage.getItem('device_id');
+
+//   if (!deviceId) {
+//     deviceId = `dev_${crypto.randomUUID()}`;
+//     localStorage.setItem('device_id', deviceId);
+
+//     return { id: deviceId, isNew: true };
+//   }
+
+//   return { id: deviceId, isNew: false };
+// }
