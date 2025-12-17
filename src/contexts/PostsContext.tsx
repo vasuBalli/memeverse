@@ -39,6 +39,7 @@ interface ApiPost {
   thumbnail?: string;
   poster?: string;
   lqip?: string;
+  likes_count: number;
 }
 
 interface ApiResponse {
@@ -78,6 +79,7 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
       type: apiPost.type,
       url: apiPost.file_url,
       title: apiPost.title,
+      likes: apiPost.likes_count,
 
       // ✅ Frontend uses username
       username: apiPost.user_name ?? 'Unknown',
@@ -90,8 +92,6 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
 
       caption: apiPost.title ?? '',
       tags: Array.isArray(apiPost.tags) ? apiPost.tags : [],
-
-      likes: 0,
       comments: 0,
       shares: 0,
       views: 0,

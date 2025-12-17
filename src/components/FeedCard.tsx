@@ -290,44 +290,123 @@ const [likeCount, setLikeCount] = useState<number>(
 // };
 
 
-const handleLike = async () => {
-  const deviceId = getDeviceId();
-  const prevLiked = isLiked;
-  const prevCount = likeCount;
+// const handleLike = async () => {
+//   const deviceId = getDeviceId();
+//   const prevLiked = isLiked;
+//   const prevCount = likeCount;
 
-  // ✅ Optimistic UI
+//   // ✅ Optimistic UI
+//   setIsLiked(!prevLiked);
+//   setLikeCount((c) => (prevLiked ? c - 1 : c + 1));
+
+//   try {
+//     const res = await fetch('/api/like/', {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify({
+//         meme_id: post.id,
+//         device_id: deviceId,
+//       }),
+//     });
+
+//     if (!res.ok) {
+//       throw new Error('Like API failed');
+//     }
+
+//     const data = await res.json();
+
+//     // ✅ TRUST BACKEND (single source of truth)
+//     setIsLiked(Boolean(data.liked));
+//     setLikeCount(Number(data.likes_count));
+//   } catch (err) {
+//     console.error('Like failed', err);
+
+//     // ❌ Rollback on failure
+//     setIsLiked(prevLiked);
+//     setLikeCount(prevCount);
+//   }
+// };
+
+
+//       const handleLike = async () => {
+//   const prevLiked = isLiked;
+//   const prevCount = post.likes;
+//   const deviceId = getDeviceId();
+
+//   // ✅ Optimistic UI
+//   setIsLiked(!prevLiked);
+//   setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
+
+//   try {
+//     const res = await fetch('/api/like/', {
+//       method: 'POST',
+//       headers: {
+//         'Content-Type': 'application/json',
+//       },
+//       body: JSON.stringify({
+//         meme_id: post.id, // ✅ ONLY meme_id
+//         device_id: deviceId,
+//       }),
+//     });
+
+//     if (!res.ok) {
+//       throw new Error('Like API failed');
+//     }
+
+//     const data = await res.json();
+
+//     // ✅ Backend is single source of truth
+//     setIsLiked(Boolean(data.liked));
+//     setLikeCount(Number(post.likes));
+//   } catch (err) {
+//     console.error('Like failed', err);
+
+//     // ❌ Rollback on failure
+//     setIsLiked(prevLiked);
+//     setLikeCount(prevCount);
+//   }
+// };
+
+const handleLike = async () => {
+  const prevLiked = isLiked;
+  const prevCount = likeCount; // ✅ use state, not post.likes
+  const deviceId = getDeviceId();
+
+  // 🚀 1. Optimistic UI (instant)
   setIsLiked(!prevLiked);
-  setLikeCount((c) => (prevLiked ? c - 1 : c + 1));
+  setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
 
   try {
     const res = await fetch('/api/like/', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         meme_id: post.id,
         device_id: deviceId,
       }),
     });
 
-    if (!res.ok) {
-      throw new Error('Like API failed');
-    }
+    if (!res.ok) throw new Error('Like API failed');
 
     const data = await res.json();
 
-    // ✅ TRUST BACKEND (single source of truth)
+    // ✅ 2. Backend = final authority
     setIsLiked(Boolean(data.liked));
     setLikeCount(Number(data.likes_count));
+
   } catch (err) {
     console.error('Like failed', err);
 
-    // ❌ Rollback on failure
+    // 🔙 3. Rollback only if API fails
     setIsLiked(prevLiked);
     setLikeCount(prevCount);
   }
 };
+
+
+
 
 
 
@@ -544,7 +623,7 @@ const handleLike = async () => {
               }`}
             />
             <span className="text-xs font-medium">
-              {formatNumber(likeCount)}
+              {likeCount}
             </span>
           </button>
 
