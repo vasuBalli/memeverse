@@ -9,6 +9,8 @@ import { FullscreenVideoModal } from './FullscreenVideoModal';
 import { Slider } from './ui/slider';
 import { toast } from 'sonner';
 import {getDeviceId} from '../components/utils/deviceId'
+import { usePostsActions, usePostsData } from '../contexts/PostsContext';
+
 
 
 interface FeedCardProps {
@@ -28,13 +30,24 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
 
   const [showMenu, setShowMenu] = useState(false);
   
-  const [isLiked, setIsLiked] = useState<boolean>(() => {
-  return Boolean((post as any).is_liked);
-});
+//   const [isLiked, setIsLiked] = useState<boolean>(() => {
+//   return Boolean((post as any).is_liked);
+// });
 
 const [likeCount, setLikeCount] = useState<number>(
   post.likes ?? 0
 );
+
+  const { interactions } = usePostsData();
+  const { updateInteraction } = usePostsActions();
+
+    const interaction = interactions[post.id] ?? {
+    is_liked: false,
+    is_bookmarked: false,
+  };
+  const isLiked = interaction.is_liked;
+  const isBookmarked = interaction.is_bookmarked;
+
 
 
 
@@ -50,13 +63,13 @@ const [likeCount, setLikeCount] = useState<number>(
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isBookmarked, setIsBookmarked] = useState<boolean>(() => {
-    try {
-      return !!localStorage.getItem(`bookmark:${post.id}`);
-    } catch {
-      return false;
-    }
-  });
+  // const [isBookmarked, setIsBookmarked] = useState<boolean>(() => {
+  //   try {
+  //     return !!localStorage.getItem(`bookmark:${post.id}`);
+  //   } catch {
+  //     return false;
+  //   }
+  // });
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibilityObserverRef = useRef<IntersectionObserver | null>(null);
@@ -117,6 +130,14 @@ const [likeCount, setLikeCount] = useState<number>(
     io.observe(containerRef.current);
     return () => io.disconnect();
   }, [post.type]);
+
+
+
+
+  useEffect(() => {
+  setLikeCount(post.likes ?? 0);
+}, [post.id, post.likes]);
+
 
   // Sync muted state with video element whenever it exists
   useEffect(() => {
@@ -369,13 +390,112 @@ const [likeCount, setLikeCount] = useState<number>(
 //   }
 // };
 
-const handleLike = async () => {
-  const prevLiked = isLiked;
-  const prevCount = likeCount; // ✅ use state, not post.likes
-  const deviceId = getDeviceId();
+// const handleLike = async () => {
+//   const prevLiked = isLiked;
+//   const prevCount = likeCount; // ✅ use state, not post.likes
+//   const deviceId = getDeviceId();
 
-  // 🚀 1. Optimistic UI (instant)
-  setIsLiked(!prevLiked);
+//   // 🚀 1. Optimistic UI (instant)
+//   setIsLiked(!prevLiked);
+//   setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
+
+//   try {
+//     const res = await fetch('/api/like/', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({
+//         meme_id: post.id,
+//         device_id: deviceId,
+//       }),
+//     });
+
+//     if (!res.ok) throw new Error('Like API failed');
+
+//     const data = await res.json();
+
+//     // ✅ 2. Backend = final authority
+//     setIsLiked(Boolean(data.liked));
+//     setLikeCount(Number(data.likes_count));
+
+//   } catch (err) {
+//     console.error('Like failed', err);
+
+//     // 🔙 3. Rollback only if API fails
+//     setIsLiked(prevLiked);
+//     setLikeCount(prevCount);
+//   }
+// };
+
+//  const handleLike = async () => {
+//     const deviceId = getDeviceId();
+//     const prevLiked = isLiked;
+//     const prevCount = likeCount;
+
+//     updateInteraction(post.id, { is_liked: !prevLiked });
+//     setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
+
+//     try {
+//       const res = await fetch('/api/like/', {
+//         method: 'POST',
+//         headers: { 'Content-Type': 'application/json' },
+//         body: JSON.stringify({
+//           meme_id: post.id,
+//           device_id: deviceId,
+//         }),
+//       });
+
+//       const data = await res.json();
+
+//       updateInteraction(post.id, { is_liked: data.liked });
+//       setLikeCount(data.likes_count);
+//     } catch {
+//       updateInteraction(post.id, { is_liked: prevLiked });
+//       setLikeCount(prevCount);
+//     }
+//   };
+
+
+
+//   const handleLike = async () => {
+//   const deviceId = getDeviceId();
+//   const prevLiked = isLiked;
+//   const prevCount = likeCount;
+
+//   // ✅ Optimistic update (UI + context)
+//   updateInteraction(post.id, { is_liked: !prevLiked });
+//   setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
+
+//   try {
+//     const res = await fetch('/api/like/', {
+//       method: 'POST',
+//       headers: { 'Content-Type': 'application/json' },
+//       body: JSON.stringify({
+//         meme_id: post.id,
+//         device_id: deviceId,
+//       }),
+//     });
+
+//     if (!res.ok) throw new Error('Like failed');
+
+//     const data = await res.json();
+
+//     // ✅ Backend = source of truth
+//     updateInteraction(post.id, { is_liked: Boolean(data.liked) });
+//     setLikeCount(Number(data.likes_count));
+//   } catch {
+//     // ❌ Rollback
+//     updateInteraction(post.id, { is_liked: prevLiked });
+//     setLikeCount(prevCount);
+//   }
+// };
+
+const handleLike = async () => {
+  const deviceId = getDeviceId();
+  const prevLiked = isLiked;
+  const prevCount = likeCount;
+
+  // optimistic
+  updateInteraction(post.id, { is_liked: !prevLiked });
   setLikeCount(prevLiked ? prevCount - 1 : prevCount + 1);
 
   try {
@@ -388,22 +508,70 @@ const handleLike = async () => {
       }),
     });
 
-    if (!res.ok) throw new Error('Like API failed');
+    if (!res.ok) throw new Error();
 
     const data = await res.json();
 
-    // ✅ 2. Backend = final authority
-    setIsLiked(Boolean(data.liked));
-    setLikeCount(Number(data.likes_count));
-
-  } catch (err) {
-    console.error('Like failed', err);
-
-    // 🔙 3. Rollback only if API fails
-    setIsLiked(prevLiked);
+    // ✅ BACKEND WINS
+    updateInteraction(post.id, { is_liked: data.liked });
+    setLikeCount(data.likes_count);
+  } catch {
+    updateInteraction(post.id, { is_liked: prevLiked });
     setLikeCount(prevCount);
   }
 };
+
+
+
+  /* ---------- BOOKMARK ---------- */
+  // const handleBookmark = async (e: React.MouseEvent) => {
+  //   e.stopPropagation();
+  //   const deviceId = getDeviceId();
+  //   const prev = isBookmarked;
+
+  //   updateInteraction(post.id, { is_bookmarked: !prev });
+
+  //   try {
+  //     const res = await fetch('/api/bookmark', {
+  //       method: 'POST',
+  //       headers: { 'Content-Type': 'application/json' },
+  //       body: JSON.stringify({
+  //         meme_id: post.id,
+  //         device_id: deviceId,
+  //       }),
+  //     });
+
+  //     const data = await res.json();
+  //     updateInteraction(post.id, { is_bookmarked: data.bookmarked });
+  //   } catch {
+  //     updateInteraction(post.id, { is_bookmarked: prev });
+  //   }
+  // };
+
+  const handleBookmark = async (e: React.MouseEvent) => {
+  e.stopPropagation();
+  const deviceId = getDeviceId();
+  const prev = isBookmarked;
+
+  updateInteraction(post.id, { is_bookmarked: !prev });
+
+  try {
+    const res = await fetch('/api/bookmark/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meme_id: post.id,
+        device_id: deviceId,
+      }),
+    });
+
+    const data = await res.json();
+    updateInteraction(post.id, { is_bookmarked: data.bookmarked });
+  } catch {
+    updateInteraction(post.id, { is_bookmarked: prev });
+  }
+};
+
 
 
 
@@ -441,26 +609,66 @@ const handleLike = async () => {
     [post.id, caption]
   );
 
-  const handleBookmark = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      try {
-        const next = !isBookmarked;
-        setIsBookmarked(next);
-        if (next) {
-          localStorage.setItem(`bookmark:${post.id}`, '1');
-          toast.success('Added to bookmarks');
-        } else {
-          localStorage.removeItem(`bookmark:${post.id}`);
-          toast.success('Removed from bookmarks');
-        }
-      } catch {
-        setIsBookmarked((s) => !s);
-        toast.success(isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks');
-      }
-    },
-    [isBookmarked, post.id]
-  );
+  // const handleBookmark = useCallback(
+  //   (e: React.MouseEvent) => {
+  //     e.stopPropagation();
+  //     try {
+  //       const next = !isBookmarked;
+  //       setIsBookmarked(next);
+  //       if (next) {
+  //         localStorage.setItem(`bookmark:${post.id}`, '1');
+  //         toast.success('Added to bookmarks');
+  //       } else {
+  //         localStorage.removeItem(`bookmark:${post.id}`);
+  //         toast.success('Removed from bookmarks');
+  //       }
+  //     } catch {
+  //       setIsBookmarked((s) => !s);
+  //       toast.success(isBookmarked ? 'Removed from bookmarks' : 'Added to bookmarks');
+  //     }
+  //   },
+  //   [isBookmarked, post.id]
+  // );
+      // const handleBookmark = useCallback(
+      //       async (e: React.MouseEvent) => {
+      //         e.stopPropagation();
+
+      //         const deviceId = getDeviceId();
+      //         const prevBookmarked = isBookmarked;
+
+      //         // ✅ Optimistic UI
+      //         setIsBookmarked(!prevBookmarked);
+
+      //         try {
+      //           const res = await fetch('/api/bookmark', {
+      //             method: 'POST',
+      //             headers: {
+      //               'Content-Type': 'application/json',
+      //             },
+      //             body: JSON.stringify({
+      //               meme_id: post.id,
+      //               device_id: deviceId,
+      //             }),
+      //           });
+
+      //           if (!res.ok) throw new Error('Bookmark failed');
+
+      //           const data = await res.json();
+
+      //           // ✅ Backend is source of truth
+      //           setIsBookmarked(Boolean(data.bookmarked));
+
+      //           toast.success(
+      //             data.bookmarked ? 'Added to bookmarks' : 'Removed from bookmarks'
+      //           );
+      //         } catch (err) {
+      //           // ❌ Rollback on failure
+      //           setIsBookmarked(prevBookmarked);
+      //           toast.error('Failed to update bookmark');
+      //         }
+      //       },
+      //       [isBookmarked, post.id]
+      //     );
 
   return (
     <div ref={containerRef} className="bg-[#15151F] rounded-2xl overflow-hidden border border-white/5 shadow-md hover:border-white/10 transition-all">
@@ -470,7 +678,7 @@ const handleLike = async () => {
           <span className="text-xs">{post.title.slice(-2)}</span>
         </div>
         <div>
-          <p className="text-sm">Device {post.username}</p>
+          <p className="text-sm">{post.username}</p>
           <p className="text-xs text-[#6B6B7B]">{formatNumber(post.views)} views</p>
         </div>
         {/* Right Actions */}
@@ -609,23 +817,25 @@ const handleLike = async () => {
         <div className="flex items-center justify-between px-4 pb-2">
           {/* Left: Like */}
           <button
-            onClick={handleLike}
-            className={`flex items-center gap-2 p-2 text-sm transition-colors ${
-              isLiked
-                ? 'text-pink-500'
-                : 'text-[#6B6B7B] hover:text-pink-400'
-            }`}
-            title="Like"
-          >
-            <Heart
-              className={`w-5 h-5 ${
-                isLiked ? 'fill-pink-500' : ''
-              }`}
-            />
-            <span className="text-xs font-medium">
-              {likeCount}
-            </span>
-          </button>
+                onClick={handleLike}
+                className={`flex items-center gap-2 p-2 text-sm transition-colors ${
+                  isLiked
+                    ? 'text-pink-500'
+                    : 'text-[#6B6B7B] hover:text-pink-400'
+                }`}
+              >
+                <Heart
+                  className="w-5 h-5 transition-all duration-150"
+                  fill={isLiked ? '#ec4899' : 'none'}
+                  stroke={isLiked ? '#ec4899' : 'currentColor'}
+                />
+
+                  <span className="text-xs font-medium">
+                    {formatNumber(likeCount)}
+                  </span>
+                </button>
+
+
 
             {/* Right: Other actions */}
             <div className="flex items-center gap-3">
