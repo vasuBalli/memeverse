@@ -15,9 +15,10 @@ interface FeedCardProps {
   post: Post;
   allPosts?: Post[];
   postIndex?: number;
+  context?: 'feed' | 'single';
 }
 
-function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
+function FeedCardInner({ post,context = 'feed', allPosts = [], postIndex = 0 }: FeedCardProps) {
 
   const caption = post.caption ?? '';
 
@@ -28,14 +29,33 @@ function FeedCardInner({ post, allPosts = [], postIndex = 0 }: FeedCardProps) {
 
   const [showMenu, setShowMenu] = useState(false);
   
-  const [isLiked, setIsLiked] = useState<boolean>(() => {
-  return Boolean((post as any).is_liked);
+//   const [isLiked, setIsLiked] = useState<boolean>(() => {
+//   return Boolean((post as any).is_liked);
+// });
+
+// const [likeCount, setLikeCount] = useState<number>(
+//   post.likes ?? 0
+// );
+
+const [isLiked, setIsLiked] = useState<boolean>(() => {
+  return !!post.is_liked;
 });
 
 const [likeCount, setLikeCount] = useState<number>(
   post.likes ?? 0
 );
 
+// 🔧 FIX: respect backend bookmark state first
+const [isBookmarked, setIsBookmarked] = useState<boolean>(() => {
+  if (typeof post.is_bookmarked === 'boolean') {
+    return post.is_bookmarked;
+  }
+  try {
+    return !!localStorage.getItem(`bookmark:${post.id}`);
+  } catch {
+    return false;
+  }
+});
 
 
 
@@ -50,13 +70,13 @@ const [likeCount, setLikeCount] = useState<number>(
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isBookmarked, setIsBookmarked] = useState<boolean>(() => {
-    try {
-      return !!localStorage.getItem(`bookmark:${post.id}`);
-    } catch {
-      return false;
-    }
-  });
+  // const [isBookmarked, setIsBookmarked] = useState<boolean>(() => {
+  //   try {
+  //     return !!localStorage.getItem(`bookmark:${post.id}`);
+  //   } catch {
+  //     return false;
+  //   }
+  // });
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visibilityObserverRef = useRef<IntersectionObserver | null>(null);
@@ -69,6 +89,11 @@ const [likeCount, setLikeCount] = useState<number>(
 
   // Observe the card container and enable media loading when within rootMargin
   useEffect(() => {
+
+    if (context !== 'feed') {
+    setLoadMedia(true); // load immediately for single post
+    return;
+  }
     const el = containerRef.current;
     if (!el) return;
 
@@ -94,10 +119,12 @@ const [likeCount, setLikeCount] = useState<number>(
       io.disconnect();
       visibilityObserverRef.current = null;
     };
-  }, [loadMedia]);
+  }, [loadMedia, context]);
 
   // Pause video when the card leaves view (observe container not video)
   useEffect(() => {
+
+    if (context !== 'feed') return;
     if (post.type !== 'video' || !containerRef.current) return;
 
     const io = new IntersectionObserver(
@@ -116,7 +143,7 @@ const [likeCount, setLikeCount] = useState<number>(
 
     io.observe(containerRef.current);
     return () => io.disconnect();
-  }, [post.type]);
+  }, [post.type, context]);
 
   // Sync muted state with video element whenever it exists
   useEffect(() => {
@@ -467,7 +494,7 @@ const handleLike = async () => {
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5">
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#6C5CE7] to-[#00A8FF] flex items-center justify-center">
-          <span className="text-xs">{post.title.slice(-2)}</span>
+          <span className="text-xs">{caption.slice(-2)}</span>
         </div>
         <div>
           <p className="text-sm">Device {post.username}</p>
@@ -609,23 +636,23 @@ const handleLike = async () => {
         <div className="flex items-center justify-between px-4 pb-2">
           {/* Left: Like */}
           <button
-            onClick={handleLike}
-            className={`flex items-center gap-2 p-2 text-sm transition-colors ${
-              isLiked
-                ? 'text-pink-500'
-                : 'text-[#6B6B7B] hover:text-pink-400'
-            }`}
-            title="Like"
-          >
-            <Heart
-              className={`w-5 h-5 ${
-                isLiked ? 'fill-pink-500' : ''
-              }`}
-            />
-            <span className="text-xs font-medium">
-              {likeCount}
-            </span>
-          </button>
+           onClick={handleLike}
+                className={`flex items-center gap-2 p-2 text-sm transition-colors ${
+                  isLiked
+                    ? 'text-pink-500'
+                    : 'text-[#6B6B7B] hover:text-pink-400'
+                }`}
+              >
+                <Heart
+                  className="w-5 h-5 transition-all duration-150"
+                  fill={isLiked ? '#ec4899' : 'none'}
+                  stroke={isLiked ? '#ec4899' : 'currentColor'}
+                />
+
+                  <span className="text-xs font-medium">
+                    {formatNumber(likeCount)}
+                  </span>
+                </button>
 
             {/* Right: Other actions */}
             <div className="flex items-center gap-3">

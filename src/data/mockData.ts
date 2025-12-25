@@ -14,6 +14,9 @@ export interface Post {
   views: number;
   lqip?:string;
   username?:string;
+  is_liked: boolean;
+    is_bookmarked: boolean;
+    
 }
 
 export const mockPosts: Post[] = []

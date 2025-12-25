@@ -3,6 +3,9 @@ import { X, Play, Pause, Volume2, VolumeX, Share2, LogOut, Download } from 'luci
 import { Slider } from '../components/ui/slider';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+
+
 
 interface FullscreenVideoModalProps {
   isOpen: boolean;
@@ -12,6 +15,8 @@ interface FullscreenVideoModalProps {
   autoPlay?: boolean;
 }
 
+
+
 export function FullscreenVideoModal({ 
   isOpen, 
   onClose, 
@@ -19,6 +24,8 @@ export function FullscreenVideoModal({
   initialTime = 0,
   autoPlay = true 
 }: FullscreenVideoModalProps) {
+
+  const navigate = useNavigate(); 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
@@ -159,6 +166,7 @@ export function FullscreenVideoModal({
           onClick={(e) => {
             e.stopPropagation();
             onClose();
+            navigate('/', { replace: true });
           }}
           className="absolute top-4 left-4 z-30 w-10 h-10 rounded-full bg-black/50 text-white flex items-center justify-center hover:bg-black/70 transition-colors"
         >

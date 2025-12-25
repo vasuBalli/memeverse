@@ -3,6 +3,31 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import FeedCard from '../components/FeedCard';
 import { Post } from '../data/mockData';
+import { getDeviceId } from '../components/utils/deviceId';
+
+function normalizePostFromApi(data: any): Post {
+  return {
+    id: data.id,
+    type: data.type,
+    url: data.file_url,
+    thumbnail: data.thumbnail ?? '',
+    images: [],
+
+    caption: data.title ?? '',
+    tags: data.tags ?? [],
+
+    likes: data.likes_count ?? 0,
+    views: data.views_count ?? 0,
+    comments: 0,
+    shares: 0,
+
+    deviceId: data.user_name ?? 'Unknown',
+
+    // 🔑 REQUIRED FLAGS (WERE MISSING)
+    is_liked: data.is_liked ?? false,
+    is_bookmarked: data.is_bookmarked ?? false,
+  };
+}
 
 export default function SinglePostPage() {
   const [params] = useSearchParams();
@@ -19,31 +44,21 @@ export default function SinglePostPage() {
       try {
         setLoading(true);
 
-        const res = await fetch(`/api/post-details/?post_id=${postId}`);
+        const res = await fetch(
+          `/api/post-details/?post_id=${postId}`,
+          {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+
         const json = await res.json();
+        if (!json?.data) throw new Error('Invalid response');
 
-        const data = json?.data;
-        if (!data) throw new Error('Invalid API response');
-
-        // ✅ NORMALIZE API RESPONSE → FeedCard Post
-        const normalizedPost: Post = {
-          id: data.id ?? postId,
-          type: data.type ?? 'image',
-          url: data.file_url,                 // 👈 IMPORTANT
-          thumbnail: data.thumbnail ?? '',
-          images: [],                          // single media post
-          caption: data.title ?? '',
-          tags: data.tags ?? [],
-          likes: 0,
-          views: 0,
-          comments: 0,
-          shares: 0,
-          deviceId: data.user_name ?? 'Unknown',
-          lqip: undefined,
-            // is_liked: data.is_liked ?? false
-        };
-
-        setPost(normalizedPost);
+        const normalized = normalizePostFromApi(json.data);
+        setPost(normalized);
       } catch (err) {
         console.error('Failed to load post', err);
         setPost(null);
@@ -55,7 +70,19 @@ export default function SinglePostPage() {
     fetchPost();
   }, [postId]);
 
-  // ---------- UI ----------
+  // ✅ Track view separately (NO CACHE, NO 304)
+  useEffect(() => {
+    if (!postId) return;
+
+    fetch('/api/view/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        meme_id: postId,
+        device_id: getDeviceId(),
+      }),
+    }).catch(() => {});
+  }, [postId]);
 
   if (loading) {
     return (
@@ -83,7 +110,8 @@ export default function SinglePostPage() {
           ← Back
         </button>
 
-        <FeedCard post={post} />
+        {/* 🔥 RENDERS CORRECTLY NOW */}
+        <FeedCard post={post} context='single' />
       </div>
     </div>
   );
