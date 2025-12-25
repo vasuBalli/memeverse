@@ -15,14 +15,8 @@ import { useDevice } from './DeviceContext';
 
 /* ---------- Types ---------- */
 
-type PostInteraction = {
-  is_liked: boolean;
-  is_bookmarked: boolean;
-};
-
 interface PostsDataValue {
   posts: Post[];
-  interactions: Record<string, PostInteraction>;
   loading: boolean;
   error: string | null;
   hasMore: boolean;
@@ -31,7 +25,6 @@ interface PostsDataValue {
 interface PostsActionsValue {
   refresh: () => Promise<void>;
   loadMore: () => Promise<void>;
-  updateInteraction: (postId: string, patch: Partial<PostInteraction>) => void;
 }
 
 interface ApiPost {
@@ -67,14 +60,12 @@ interface PostsProviderProps {
 
 export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [interactions, setInteractions] = useState<Record<string, PostInteraction>>(
-    {}
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
+  // ✅ deviceId ONLY for API
   const { deviceId, isNewDevice } = useDevice();
 
   const initializedRef = useRef(false);
@@ -88,85 +79,30 @@ export const PostsProvider: FC<PostsProviderProps> = ({ children }) => {
       type: apiPost.type,
       url: apiPost.file_url,
       title: apiPost.title,
+      likes: apiPost.likes_count,
 
-      caption: apiPost.title ?? '',
-      tags: Array.isArray(apiPost.tags) ? apiPost.tags : [],
-
-      likes: apiPost.likes_count ?? 0,
-      views: 0,
-      comments: 0,
-      shares: 0,
-
-      deviceId: apiPost.user_name ?? 'Unknown',
+      // ✅ Frontend uses username
+      username: apiPost.user_name ?? 'Unknown',
 
       images: [],
+      aspectRatio: undefined,
       thumbnail: apiPost.thumbnail,
       poster: apiPost.poster,
       lqip: apiPost.lqip,
+
+      caption: apiPost.title ?? '',
+      tags: Array.isArray(apiPost.tags) ? apiPost.tags : [],
+      comments: 0,
+      shares: 0,
+      views: 0,
     }));
   }, []);
-
-  /* ---------- Safe setters ---------- */
 
   const safeSetPosts = useCallback((updater: (prev: Post[]) => Post[]) => {
     setPosts((prev) => updater(prev));
   }, []);
 
-  // const ensureInteractions = useCallback((posts: Post[]) => {
-  //   setInteractions((prev) => {
-  //     const next = { ...prev };
-
-  //     for (const post of posts) {
-  //       if (!next[post.id]) {
-  //         next[post.id] = {
-  //           is_liked: false,
-  //           is_bookmarked: false,
-  //         };
-  //       }
-  //     }
-
-  //     return next;
-  //   });
-  // }, []);
-
-//   const ensureInteractions = useCallback((posts: Post[]) => {
-//   setInteractions((prev) => {
-//     const next = { ...prev };
-
-//     for (const post of posts) {
-//       if (!(post.id in next)) {
-//         next[post.id] = {
-//           is_liked: false,
-//           is_bookmarked: false,
-//         };
-//       }
-//     }
-
-//     return next;
-//   });
-// }, []);
-
-const ensureInteractions = useCallback((posts: Post[]) => {
-  setInteractions((prev) => {
-    let changed = false;
-    const next = { ...prev };
-
-    for (const post of posts) {
-      if (next[post.id] === undefined) {
-        next[post.id] = {
-          is_liked: false,
-          is_bookmarked: false,
-        };
-        changed = true;
-      }
-    }
-
-    return changed ? next : prev;
-  });
-}, []);
-
   /* ---------- Fetch Posts ---------- */
-
   const fetchPosts = useCallback(
     async (pageToLoad: number, append: boolean) => {
       if (!deviceId) return;
@@ -179,6 +115,7 @@ const ensureInteractions = useCallback((posts: Post[]) => {
         setLoading(true);
         setError(null);
 
+        // ✅ Send device_id ONLY for first-time user
         const url = isNewDevice
           ? `/api/feed/?page=${pageToLoad}&device_id=${deviceId}`
           : `/api/feed/?page=${pageToLoad}`;
@@ -204,8 +141,6 @@ const ensureInteractions = useCallback((posts: Post[]) => {
           return filtered.length ? [...prev, ...filtered] : prev;
         });
 
-        ensureInteractions(normalized);
-
         setHasMore(normalized.length > 0);
         setPage(pageToLoad);
 
@@ -224,7 +159,7 @@ const ensureInteractions = useCallback((posts: Post[]) => {
         }
       }
     },
-    [deviceId, isNewDevice, normalizePosts, safeSetPosts, ensureInteractions]
+    [deviceId, isNewDevice, normalizePosts, safeSetPosts]
   );
 
   /* ---------- Actions ---------- */
@@ -240,21 +175,7 @@ const ensureInteractions = useCallback((posts: Post[]) => {
     await fetchPosts(page + 1, true);
   }, [fetchPosts, page, loading, hasMore]);
 
-  const updateInteraction = useCallback(
-    (postId: string, patch: Partial<PostInteraction>) => {
-      setInteractions((prev) => ({
-        ...prev,
-        [postId]: {
-          ...(prev[postId] ?? { is_liked: false, is_bookmarked: false }),
-          ...patch,
-        },
-      }));
-    },
-    []
-  );
-
-  /* ---------- Initial Fetch ---------- */
-
+  /* ---------- Initial Fetch (ONLY ONCE) ---------- */
   useEffect(() => {
     if (!deviceId) return;
     if (initializedRef.current) return;
@@ -265,13 +186,13 @@ const ensureInteractions = useCallback((posts: Post[]) => {
   /* ---------- Context Values ---------- */
 
   const dataValue = useMemo(
-    () => ({ posts, interactions, loading, error, hasMore }),
-    [posts, interactions, loading, error, hasMore]
+    () => ({ posts, loading, error, hasMore }),
+    [posts, loading, error, hasMore]
   );
 
   const actionsValue = useMemo(
-    () => ({ refresh, loadMore, updateInteraction }),
-    [refresh, loadMore, updateInteraction]
+    () => ({ refresh, loadMore }),
+    [refresh, loadMore]
   );
 
   return (
