@@ -18,11 +18,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: 📦 Install dependencies
+      - name: 📦 Install dependencies (CI validation only)
         run: npm install
 
-      - name: 🏗️ Build Next.js app
-        run: npm run build
+      # ❌ BUILD REMOVED FROM CI (important)
 
       - name: 🔐 Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
@@ -31,7 +30,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🌍 Navigating to Next.js app directory..."
+            echo "🌍 Navigating to app directory..."
             cd /home/ubuntu/memeverse
 
             echo "🔄 Pulling latest code..."
@@ -41,11 +40,14 @@ jobs:
             echo "📦 Installing dependencies..."
             npm install
 
-            echo "🏗️ Building Next.js app..."
+            echo "🏗️ Building Next.js app (EC2 only)..."
             npm run build
 
-            echo "🔁 Restarting Next.js app (PM2)..."
-            pm2 restart instadl_frontend || pm2 start npm --name "instadl_frontend" -- start
+            echo "🚀 Starting / Reloading Next.js with PM2..."
+            pm2 reload ecosystem.config.js --env production || pm2 start ecosystem.config.js
+
+            echo "💾 Saving PM2 process..."
+            pm2 save
 
             echo "🔁 Reloading Nginx..."
             sudo nginx -t
