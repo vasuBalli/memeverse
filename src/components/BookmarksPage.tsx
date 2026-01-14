@@ -5,11 +5,13 @@ import { FeedCard } from './FeedCard';
 import { Bookmark, Ghost } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 
+import { Post } from '@/data/mockData';
+
 import Link from 'next/link';
 
 export function BookmarksPage() {
   const { bookmarks } = useStore();
-  const [bookmarkedPosts, setBookmarkedPosts] = useState([]);
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<Post[]>([]);
 
   // useEffect(() => {
   //   const saved = mockPosts.filter(post => bookmarks.includes(post.id));
