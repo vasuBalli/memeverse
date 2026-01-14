@@ -1,0 +1,55 @@
+name: 🚀 Deploy Next.js App to AWS EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧩 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 📦 Install dependencies
+        run: npm install
+
+      - name: 🏗️ Build Next.js app
+        run: npm run build
+
+      - name: 🔐 Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🌍 Navigating to Next.js app directory..."
+            cd /home/ubuntu/memeverse
+
+            echo "🔄 Pulling latest code..."
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "📦 Installing dependencies..."
+            npm install
+
+            echo "🏗️ Building Next.js app..."
+            npm run build
+
+            echo "🔁 Restarting Next.js app (PM2)..."
+            pm2 restart instadl_frontend || pm2 start npm --name "instadl_frontend" -- start
+
+            echo "🔁 Reloading Nginx..."
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+      - name: ✅ Deployment Finished
+        run: echo "Next.js app successfully deployed to EC2"

@@ -1,0 +1,143 @@
+"use client";
+
+import { useEffect, useState } from 'react';
+import { FeedCard } from './FeedCard';
+import { Post } from '@/data/mockData';
+// import { getDeviceId } from '@/components/utils/deviceId';
+
+// function normalizePostFromApi(data: any): Post {
+//   return {
+//     id: data.id,
+//     type: data.type,
+//     file_url: data.file_url,
+//     thumbnail: data.thumbnail ?? '',
+//     images: [],
+//     title: data.title ?? '',
+//     tags: data.tags ?? [],
+//     likes: data.likes_count ?? 0,
+//     views: data.views_count ?? 0,
+//     comments: 0,
+//     shares: 0,
+//     deviceId: data.user_name ?? 'Unknown',
+//     is_liked: data.is_liked ?? false,
+//     is_bookmarked: data.is_bookmarked ?? false,
+//   };
+// }
+function normalizePostFromApi(data: any): Post {
+  return {
+    id: data.id,
+    type: data.type,
+
+    // 🔥 MUST MATCH FEEDCARD
+    file_url: data.file_url,
+    title: data.title ?? '',
+
+    thumbnail: data.thumbnail ?? '',
+    images: [],
+
+    tags: data.tags ?? [],
+
+    likes: data.likes_count ?? 0,
+    views: data.views_count ?? 0,
+    comments: 0,
+    shares: 0,
+
+    deviceId: data.user_name ?? 'Unknown',
+
+    is_liked: data.is_liked ?? false,
+    is_bookmarked: data.is_bookmarked ?? false,
+  };
+}
+
+export function SinglePostPage({ postId }: { postId: string }) {
+  const [post, setPost] = useState<Post | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // ✅ SAME API CONTRACT AS PROD
+//   useEffect(() => {
+//     const fetchPost = async () => {
+//       try {
+//         const res = await
+//           fetch(`${process.env.NEXT_PUBLIC_BACKEND_API_BASE}/api/post-details/?post_id=${postId}`, {
+//   cache: 'no-store',
+// });
+
+
+//         const json = await res.json();
+//         if (!json?.data) throw new Error('Invalid response');
+
+//         setPost(normalizePostFromApi(json.data));
+//       } catch (err) {
+//         console.error(err);
+//         setPost(null);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
+
+//     fetchPost();
+//   }, [postId]);
+
+  useEffect(() => {
+  if (!postId) return;
+
+  const fetchPost = async () => {
+    try {
+      setLoading(true);
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/api/post_details?post_id=${postId}`,
+        {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        }
+      );
+
+      const json = await res.json();
+      console.log('POST DETAILS RESPONSE:', json);
+
+      if (!json?.data) throw new Error('Invalid response');
+
+      setPost(normalizePostFromApi(json.data));
+    } catch (err) {
+      console.error('Failed to load post', err);
+      setPost(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchPost();
+}, [postId]);
+
+
+  // // ✅ VIEW TRACKING (SAME AS VITE)
+  // useEffect(() => {
+  //   fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/view/`, {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({
+  //       meme_id: postId,
+  //       // device_id: getDeviceId(),
+  //     }),
+  //   }).catch(() => {});
+  // }, [postId]);
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
+  }
+
+  if (!post) {
+    return <div className="min-h-screen flex items-center justify-center text-red-400">Post not found</div>;
+  }
+
+  return (
+    <div className="min-h-screen flex justify-center">
+      <div className="max-w-md w-full p-3">
+        <FeedCard post={post} context="single" />
+      </div>
+    </div>
+  );
+}
