@@ -19,6 +19,8 @@ export function TemplateEditor() {
   const params = useParams();
   const id = params?.id as string;
   const template = mockTemplates.find(t => t.id === id);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
   
   // Store crop data instead of just the file
   const [uploads, setUploads] = useState<Record<string, CropData>>({});
@@ -300,7 +302,7 @@ export function TemplateEditor() {
 
                 <input
                   type="file"
-                  ref={el => fileInputRefs.current[slot.id] = el}
+                  ref={inputRef}
                   className="hidden"
                   accept={slot.type === 'image' ? "image/*" : "video/*"}
                   onChange={(e) => handleFileSelect(slot.id, e)}

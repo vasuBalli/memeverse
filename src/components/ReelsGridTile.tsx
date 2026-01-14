@@ -34,7 +34,7 @@ export function ReelsGridTile({ post, onClick }: ReelsGridTileProps) {
       {/* Video Thumbnail */}
       {post.type === 'video' ? (
         <video
-          src={post.url}
+          src={post.file_url}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           muted
           playsInline
@@ -46,8 +46,8 @@ export function ReelsGridTile({ post, onClick }: ReelsGridTileProps) {
         />
       ) : (
         <ImageWithFallback
-          src={post.url}
-          alt={post.caption}
+          src={post.file_url}
+          alt={post.title}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
       )}
@@ -57,7 +57,7 @@ export function ReelsGridTile({ post, onClick }: ReelsGridTileProps) {
 
       {/* Stats overlay */}
       <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
-        <p className="text-white text-sm mb-2 line-clamp-2">{post.caption}</p>
+        <p className="text-white text-sm mb-2 line-clamp-2">{post.title}</p>
         <div className="flex items-center gap-3 text-xs text-white/80">
           <div className="flex items-center gap-1">
             <Eye className="w-3.5 h-3.5" />

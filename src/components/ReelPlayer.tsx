@@ -3,7 +3,7 @@ import { Post, formatNumber } from '../data/mockData';
 import { Download, Share2, Volume2, VolumeX, Play, Pause } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { motion, AnimatePresence } from 'motion/react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface ReelPlayerProps {
   post: Post;
@@ -54,7 +54,7 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(post.url);
+      const response = await fetch(post.file_url);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -86,7 +86,7 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
         {post.type === 'video' ? (
           <video
             ref={videoRef}
-            src={post.url}
+            src={post.file_url}
             className="w-full h-full object-contain"
             loop
             playsInline
@@ -95,8 +95,8 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
           />
         ) : (
           <ImageWithFallback
-            src={post.url}
-            alt={post.caption}
+            src={post.file_url}
+            alt={post.title}
             className="w-full h-full object-contain"
           />
         )}
@@ -188,7 +188,7 @@ export function ReelPlayer({ post, isActive }: ReelPlayerProps) {
         </div>
 
         {/* Caption */}
-        <p className="text-sm text-white leading-relaxed line-clamp-3">{post.caption}</p>
+        <p className="text-sm text-white leading-relaxed line-clamp-3">{post.title}</p>
 
         {/* Tags */}
         <div className="flex flex-wrap gap-2">

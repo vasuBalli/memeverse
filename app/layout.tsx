@@ -5,45 +5,48 @@ import '@/styles/globals.css';
 import { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 
-
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
 });
 
-
-
-
 export const metadata: Metadata = {
   title: {
-    default: "Memeverse – Viral Memes & Reels",
-    template: "%s | Memeverse",
+    default: 'Memeverse – Viral Memes & Reels',
+    template: '%s | Memeverse',
   },
   description:
-    "Memeverse is a platform to explore trending memes, viral reels, and funny videos updated daily.",
-  keywords: ["memes", "reels", "viral videos", "funny memes"],
+    'Memeverse is a platform to explore trending memes, viral reels, and funny videos updated daily.',
+  keywords: ['memes', 'reels', 'viral videos', 'funny memes'],
   alternates: {
-    canonical: "https://memeverse.in",
+    canonical: 'https://memeverse.in',
   },
   openGraph: {
-    siteName: "Memeverse",
-    type: "website",
-    locale: "en_IN",
-    url: "https://memeverse.in",
+    siteName: 'Memeverse',
+    type: 'website',
+    locale: 'en_IN',
+    url: 'https://memeverse.in',
     images: [
       {
-        url: "https://memeverse.in/og-default.jpg",
+        url: 'https://memeverse.in/og-default.jpg',
         width: 1200,
         height: 630,
-        alt: "Memeverse – Viral Memes & Reels",
+        alt: 'Memeverse – Viral Memes & Reels',
       },
     ],
   },
   twitter: {
-    card: "summary_large_image",
-    site: "@memeverse",
+    card: 'summary_large_image',
+    site: '@memeverse',
   },
-   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
+};
+
+// ✅ MUST be separate in App Router
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

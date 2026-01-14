@@ -1,169 +1,143 @@
+'use client';
+
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { Post, mockPosts } from '../data/mockData';
-import { ReelPlayer } from './ReelPlayer';
+import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 
-export function ReelsViewer() {
-  const { id } = useParams<{ id: string }>();
-  const location = useLocation();
-  const navigate = useNavigate();
-  
-  const [posts, setPosts] = useState<Post[]>(
-    (location.state?.posts || mockPosts).filter((p: Post) => p.type === 'video')
-  );
-  const [currentIndex, setCurrentIndex] = useState(
-    location.state?.initialIndex || posts.findIndex(p => p.id === id) || 0
-  );
-  
+import { Post } from '@/data/mockData';
+import { ReelPlayer } from './ReelPlayer';
+
+interface ReelsViewerProps {
+  initialPosts: Post[];
+  initialIndex: number;
+}
+
+export function ReelsViewer({
+  initialPosts,
+  initialIndex,
+}: ReelsViewerProps) {
+  const router = useRouter();
+
+  const [posts] = useState<Post[]>(initialPosts);
+  const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  /* Lock background scroll */
   useEffect(() => {
-    // Prevent background scroll
     document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = '';
     };
   }, []);
 
-  // Intersection Observer to track which video is in view
+  /* Observe active reel */
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = parseInt(entry.target.getAttribute('data-index') || '0');
-            setCurrentIndex(index);
-            
-            // Update URL
-            const post = posts[index];
-            if (post) {
-              window.history.replaceState(
-                { posts, initialIndex: index },
-                '',
-                `/reels/${post.id}`
-              );
-            }
+      entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+
+          const index = Number(
+            entry.target.getAttribute('data-index')
+          );
+
+          if (Number.isNaN(index)) return;
+
+          setCurrentIndex(index);
+
+          const post = posts[index];
+          if (post) {
+            router.replace(`/reels/${post.id}`);
           }
         });
       },
-      {
-        root: null,
-        threshold: 0.5,
-      }
+      { threshold: 0.5 }
     );
 
-    // Observe all video elements
-    const videoElements = containerRef.current?.querySelectorAll('.reel-item');
-    videoElements?.forEach((el) => observerRef.current?.observe(el));
+    const items =
+      containerRef.current?.querySelectorAll('.reel-item');
 
-    return () => {
-      observerRef.current?.disconnect();
-    };
-  }, [posts]);
+    items?.forEach(el => observerRef.current?.observe(el));
 
-  // Scroll to initial video on mount
+    return () => observerRef.current?.disconnect();
+  }, [posts, router]);
+
+  /* Scroll to initial reel */
   useEffect(() => {
-    const element = containerRef.current?.querySelector(`[data-index="${currentIndex}"]`);
-    if (element) {
-      element.scrollIntoView({ behavior: 'auto', block: 'start' });
-    }
-  }, []);
+    const el = containerRef.current?.querySelector(
+      `[data-index="${initialIndex}"]`
+    );
+    el?.scrollIntoView({ behavior: 'auto' });
+  }, [initialIndex]);
 
-  // Keyboard navigation
+  /* Keyboard navigation */
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown' && currentIndex < posts.length - 1) {
-        const element = containerRef.current?.querySelector(`[data-index="${currentIndex + 1}"]`);
-        element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      if (e.key === 'ArrowUp' && currentIndex > 0) {
-        const element = containerRef.current?.querySelector(`[data-index="${currentIndex - 1}"]`);
-        element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-      if (e.key === 'Escape') {
-        handleClose();
-      }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+      if (e.key === 'ArrowDown') scrollTo(currentIndex + 1);
+      if (e.key === 'ArrowUp') scrollTo(currentIndex - 1);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, posts.length]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [currentIndex]);
+
+  const scrollTo = (index: number) => {
+    const el = containerRef.current?.querySelector(
+      `[data-index="${index}"]`
+    );
+    el?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   const handleClose = () => {
-    navigate(-1);
-  };
-
-  const handleNext = () => {
-    if (currentIndex < posts.length - 1) {
-      const element = containerRef.current?.querySelector(`[data-index="${currentIndex + 1}"]`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentIndex > 0) {
-      const element = containerRef.current?.querySelector(`[data-index="${currentIndex - 1}"]`);
-      element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    router.back();
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black">
-      {/* Close button */}
+      {/* Close */}
       <button
         onClick={handleClose}
-        className="fixed top-4 right-4 z-50 w-10 h-10 rounded-full glass flex items-center justify-center hover:bg-white/10 transition-colors"
+        className="fixed top-4 right-4 z-50 w-10 h-10 rounded-full glass flex items-center justify-center"
       >
         <X className="w-6 h-6 text-white" />
       </button>
 
-      {/* Scrollable container with snap */}
+      {/* Reels container */}
       <div
         ref={containerRef}
-        className="w-full h-full overflow-y-scroll snap-y snap-mandatory scroll-smooth reel-container"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        className="w-full h-full overflow-y-scroll snap-y snap-mandatory reel-container"
       >
-        <style>{`
-          .reel-container::-webkit-scrollbar {
-            display: none;
-          }
-        `}</style>
-        
         {posts.map((post, index) => (
           <div
             key={post.id}
             data-index={index}
-            className="reel-item w-full h-full snap-start snap-always flex-shrink-0"
+            className="reel-item w-full h-full snap-start"
           >
             <ReelPlayer
               post={post}
               isActive={index === currentIndex}
-              onNext={handleNext}
-              onPrevious={handlePrevious}
               hasNext={index < posts.length - 1}
               hasPrevious={index > 0}
+              onNext={() => scrollTo(index + 1)}
+              onPrevious={() => scrollTo(index - 1)}
             />
           </div>
         ))}
       </div>
 
-      {/* Progress indicator */}
-      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex gap-1">
-        {posts.slice(Math.max(0, currentIndex - 2), Math.min(posts.length, currentIndex + 3)).map((post, idx) => {
-          const actualIndex = Math.max(0, currentIndex - 2) + idx;
-          return (
-            <div
-              key={post.id}
-              className={`h-0.5 rounded-full transition-all duration-300 ${
-                actualIndex === currentIndex
-                  ? 'w-8 bg-white'
-                  : 'w-2 bg-white/30'
-              }`}
-            />
-          );
-        })}
+      {/* Progress bar */}
+      <div className="fixed top-20 left-1/2 -translate-x-1/2 flex gap-1 z-50">
+        {posts.map((_, i) => (
+          <div
+            key={i}
+            className={`h-0.5 rounded-full transition-all ${
+              i === currentIndex ? 'w-8 bg-white' : 'w-2 bg-white/30'
+            }`}
+          />
+        ))}
       </div>
     </div>
   );

@@ -1,26 +1,73 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { mockPosts } from '../data/mockData';
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
+
 import { ReelsGridTile } from './ReelsGridTile';
 import { ReelsGridSkeleton } from './ReelsGridSkeleton';
 import { UploadFAB } from './UploadFAB';
-import { motion } from 'motion/react';
 
-export function ReelsGridPage() {
-  const [posts, setPosts] = useState(mockPosts.filter(post => post.type === 'video'));
+import { Post } from '@/data/mockData';
+
+interface ReelsGridPageProps {
+  initialPosts: Post[];
+}
+
+export function ReelsGridPage({ initialPosts }: ReelsGridPageProps) {
+  const router = useRouter();
+
+  const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [page, setPage] = useState(2); // page 1 already fetched on server
   const [isLoading, setIsLoading] = useState(false);
-  const [page, setPage] = useState(1);
-  const observerRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const [hasMore, setHasMore] = useState(true);
 
-  // Infinite scroll
+  const observerRef = useRef<HTMLDivElement | null>(null);
+
+  /* ------------------------------------------------------------ */
+  /* Load more reels (direct fetch, no helper)                      */
+  /* ------------------------------------------------------------ */
+
+  const loadMore = useCallback(async () => {
+    if (isLoading || !hasMore) return;
+
+    setIsLoading(true);
+
+    try {
+      const res = await fetch(`/api/feed?page=${page}`, {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) throw new Error('Feed fetch failed');
+
+      const feed: Post[] = await res.json();
+
+      const videoPosts = feed.filter(
+        (post) => post.type === 'video'
+      );
+
+      if (videoPosts.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      setPosts(prev => [...prev, ...videoPosts]);
+      setPage(prev => prev + 1);
+    } catch (err) {
+      console.error('Failed to load reels', err);
+      setHasMore(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, isLoading, hasMore]);
+
+  /* ------------------------------------------------------------ */
+  /* Infinite scroll                                               */
+  /* ------------------------------------------------------------ */
+
   useEffect(() => {
     const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !isLoading) {
-          loadMore();
-        }
-      },
+      ([entry]) => entry.isIntersecting && loadMore(),
       { threshold: 0.5 }
     );
 
@@ -29,33 +76,23 @@ export function ReelsGridPage() {
     }
 
     return () => observer.disconnect();
-  }, [isLoading]);
+  }, [loadMore]);
 
-  const loadMore = async () => {
-    setIsLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const newPosts = mockPosts
-      .filter(post => post.type === 'video')
-      .map(post => ({
-        ...post,
-        id: `${post.id}-page${page + 1}`
-      }));
-    
-    setPosts(prev => [...prev, ...newPosts]);
-    setPage(prev => prev + 1);
-    setIsLoading(false);
-  };
+  /* ------------------------------------------------------------ */
+  /* Navigation                                                     */
+  /* ------------------------------------------------------------ */
 
   const handleTileClick = (postId: string) => {
-    const index = posts.findIndex(p => p.id === postId);
-    navigate(`/reels/${postId}`, { state: { posts, initialIndex: index } });
+    router.push(`/reels/${postId}`);
   };
+
+  /* ------------------------------------------------------------ */
+  /* Render                                                        */
+  /* ------------------------------------------------------------ */
 
   return (
     <>
       <main className="max-w-7xl mx-auto px-2 sm:px-4 py-6 pb-24">
-        {/* Grid Header */}
         <div className="mb-6 px-2">
           <h2 className="gradient-text">Explore Reels</h2>
           <p className="text-sm text-[#6B6B7B] mt-1">
@@ -63,7 +100,6 @@ export function ReelsGridPage() {
           </p>
         </div>
 
-        {/* Masonry Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 sm:gap-2">
           {posts.map((post, index) => (
             <motion.div
@@ -80,15 +116,13 @@ export function ReelsGridPage() {
           ))}
         </div>
 
-        {/* Loading skeletons */}
         {isLoading && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 sm:gap-2 mt-1 sm:mt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1 sm:gap-2 mt-2">
             <ReelsGridSkeleton />
           </div>
         )}
 
-        {/* Intersection observer target */}
-        <div ref={observerRef} className="h-10" />
+        {hasMore && <div ref={observerRef} className="h-10" />}
       </main>
 
       <UploadFAB />
