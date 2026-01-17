@@ -20,7 +20,11 @@ interface FeedPageProps {
 export function FeedPage({ initialPosts }: FeedPageProps) {
 
 
-  const [posts, setPosts] = useState(initialPosts);
+  // const [posts, setPosts] = useState(initialPosts);
+  const [posts, setPosts] = useState(
+  Array.isArray(initialPosts) ? initialPosts : []
+);
+
   const [isLoading, setIsLoading] = useState(false);
   const [page, setPage] = useState(1);
   const observerRef = useRef<HTMLDivElement>(null);
@@ -28,6 +32,8 @@ export function FeedPage({ initialPosts }: FeedPageProps) {
 
     const [fullscreenPost, setFullscreenPost] = useState<any | null>(null);
 const [fullscreenTime, setFullscreenTime] = useState(0);
+
+
 
   // Restore scroll position
   useEffect(() => {
@@ -159,6 +165,7 @@ const [fullscreenTime, setFullscreenTime] = useState(0);
 
         {/* Feed Posts */}
         <div className="space-y-6">
+          
           {posts.map((post, index) => (
             <motion.div
               key={post.id}

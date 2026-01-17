@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   }
 
   const backendRes = await fetch(
-    `${process.env.NEXT_PUBLIC_BACKEND_API_BASE}/api/post-details/?post_id=${post_id}`,
+    `${process.env.NEXT_PUBLIC_BACKEND_API_BASE}/post-details/?post_id=${post_id}`,
     { cache: 'no-store' }
   );
 

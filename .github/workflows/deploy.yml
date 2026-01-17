@@ -1,4 +1,4 @@
-name: 🚀 Deploy Next.js App to AWS EC2
+name: Deploy Next.js to EC2
 
 on:
   push:
@@ -6,52 +6,58 @@ on:
       - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🧩 Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20   # ✅ FIXED
 
-      - name: 📦 Install dependencies (CI validation only)
-        run: npm install
+      - name: Install dependencies
+        run: npm ci
 
-      # ❌ BUILD REMOVED FROM CI (important)
+      - name: Build Next.js
+        run: npm run build
+        env:                # ✅ ENSURE BUILD ENV MATCHES PROD
+          NEXT_PUBLIC_SITE_URL: https://memeverse.in
+          NEXT_PUBLIC_BACKEND_API_BASE: https://memeverse.in/api
 
-      - name: 🔐 Deploy to EC2
+      - name: Create build archive
+        run: |
+          tar -czf build.tar.gz \
+            .next \
+            package.json \
+            package-lock.json \
+            next.config.mjs \
+            ecosystem.config.js   # ✅ ADDED
+
+      - name: Upload to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "build.tar.gz"
+          target: "/home/ubuntu/memeverse"
+
+      - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🌍 Navigating to app directory..."
             cd /home/ubuntu/memeverse
+            tar -xzf build.tar.gz
 
-            echo "🔄 Pulling latest code..."
-            git fetch origin main
-            git reset --hard origin/main
+            npm install --production
 
-            echo "📦 Installing dependencies..."
-            npm install
+            # ✅ FIXED PM2 NAME + FALLBACK
+            pm2 restart nextjs-app || pm2 start ecosystem.config.js
 
-            echo "🏗️ Building Next.js app (EC2 only)..."
-            npm run build
-
-            echo "🚀 Starting / Reloading Next.js with PM2..."
-            pm2 reload ecosystem.config.js --env production || pm2 start ecosystem.config.js
-
-            echo "💾 Saving PM2 process..."
             pm2 save
-
-            echo "🔁 Reloading Nginx..."
-            sudo nginx -t
-            sudo systemctl reload nginx
-
-      - name: ✅ Deployment Finished
-        run: echo "Next.js app successfully deployed to EC2"

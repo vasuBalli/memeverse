@@ -5,7 +5,7 @@ export async function GET(req: Request) {
   const page = searchParams.get('page') ?? '1';
 
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_BACKEND_API_BASE}/api/feed?page=${page}`,
+    `${process.env.NEXT_PUBLIC_BACKEND_API_BASE}/feed?page=${page}`,
     { cache: 'no-store' }
   );
 
