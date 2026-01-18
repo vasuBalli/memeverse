@@ -199,8 +199,25 @@ useEffect(() => {
                        max={duration || 100}
                        step={0.1}
                        onValueChange={handleSeek}
-                       className="flex-1 cursor-pointer"
-                     />
+                      
+                       className="
+                          cursor-pointer
+
+                          [&_[data-slot=slider-track]]:h-1
+                          [&_[data-slot=slider-track]]:bg-[#2A2A3A]
+
+                          [&_[data-slot=slider-range]]:bg-gradient-to-r
+                          [&_[data-slot=slider-range]]:from-[#6C5CE7]
+                          [&_[data-slot=slider-range]]:to-[#8E7CFF]
+
+                          [&_[data-slot=slider-thumb]]:w-3
+                          [&_[data-slot=slider-thumb]]:h-3
+                          [&_[data-slot=slider-thumb]]:bg-[#6C5CE7]
+                          [&_[data-slot=slider-thumb]]:border
+                          [&_[data-slot=slider-thumb]]:border-white
+                          [&_[data-slot=slider-thumb]]:ring-0
+                        "
+                      />
                      <span className="text-xs text-white/80 w-10">{formatTime(duration)}</span>
                   </div>
 
