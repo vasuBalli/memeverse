@@ -2,7 +2,7 @@ import { FeedPage } from '@/components/FeedPage';
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Memeverse – Trending Memes & Reels, Latest Meme Feed',
+  title: 'Memeversee – Trending Memes & Reels, Latest Meme Feed',
   description:
     'Explore trending memes, viral reels, and funny videos on Memeverse.',
   keywords: ['memes', 'reels', 'funny videos', 'memeverse'],
