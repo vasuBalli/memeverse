@@ -175,6 +175,7 @@ export function FeedPage({ initialPosts }: FeedPageProps) {
               />
             </motion.div>
           ))}
+          
         </div>
 
         {/* Loading indicator */}

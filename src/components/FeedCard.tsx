@@ -1,5 +1,5 @@
 "use client"
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo} from 'react';
 import { useRouter } from 'next/navigation';
 import { Post, formatNumber } from '../data/mockData';
 import { Download, Share2, Volume2, VolumeX, Maximize2, Play, Pause, Bookmark, Heart, MoreVertical } from 'lucide-react';
@@ -19,6 +19,14 @@ interface FeedCardProps {
   context?: 'feed' | 'single';
 }
 
+const getFirstFrame = (videoUrl: string) => {
+  return videoUrl.replace(
+    '/video/upload/',
+    '/video/upload/so_0,c_fill,w_720,h_900,q_auto,f_jpg/'
+  );
+};
+
+
 export function FeedCard({ post, allPosts = [], postIndex = 0,context = 'feed',onOpenFullscreen}: FeedCardProps) {
   const router = useRouter();
   const { toggleLike, toggleBookmark, isLiked, isBookmarked } = useStore();
@@ -28,15 +36,15 @@ export function FeedCard({ post, allPosts = [], postIndex = 0,context = 'feed',o
   const [isPlaying, setIsPlaying] = useState(false);
   const [showFullCaption, setShowFullCaption] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  
+
   // const [isFullscreenOpen, setIsFullscreenOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
    const [showMenu, setShowMenu] = useState(false);
 
-  
-
-  
   // Check state from store
   const liked = isLiked(post.id);
   const bookmarked = isBookmarked(post.id);
@@ -44,23 +52,49 @@ export function FeedCard({ post, allPosts = [], postIndex = 0,context = 'feed',o
   // Interaction timer for auto-hiding controls
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // const CHAR_LIMIT = 300;
-  // const shouldTruncate = post.title.length > CHAR_LIMIT;
-  // const hasTags = post.tags && post.tags.length > 0;
+const posterImage = post.thumbnail || getFirstFrame(post.file_url);
+
+const { shouldTruncate, hasTags } = useMemo(() => {
+  const CHAR_LIMIT = 15;
+  return {
+    shouldTruncate: post.title.length > CHAR_LIMIT,
+    hasTags: !!(post.tags && post.tags.length),
+  };
+}, [post.title, post.tags]);
 
 
-   const CHAR_LIMIT = 15;
-  // const shouldTruncate = post.caption.length > CHAR_LIMIT;
-  const shouldTruncate = post.title.length > CHAR_LIMIT;
+const [videoReady, setVideoReady] = useState(false);
 
-  const hasTags = !!(post.tags && post.tags.length);
 
 
   // Handle video visibility - Pause when out of view
-  useEffect(() => {
-     if (context === 'single') return;
-    if (post.type !== 'video' || !videoRef.current) return;
+  // useEffect(() => {
+  //    if (context === 'single') return;
+  //   if (post.type !== 'video' || !hasStarted || !videoRef.current) return;
 
+
+  //   const observer = new IntersectionObserver(
+  //     (entries) => {
+  //       entries.forEach((entry) => {
+  //         if (!entry.isIntersecting) {
+  //           videoRef.current?.pause();
+  //           setIsPlaying(false);
+  //         }
+  //       });
+  //     },
+  //     { threshold: 0.5 }
+  //   );
+
+  //   observer.observe(videoRef.current);
+
+  //   return () => observer.disconnect();
+  // }, [post.type,context]);
+
+  useEffect(() => {
+  if (context === 'single') return;
+  if (post.type !== 'video' || !hasStarted || !videoRef.current) return;
+
+  const setupObserver = () => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -72,26 +106,61 @@ export function FeedCard({ post, allPosts = [], postIndex = 0,context = 'feed',o
       },
       { threshold: 0.5 }
     );
+          const videoEl = videoRef.current;
+      if (!videoEl) return;
 
-    observer.observe(videoRef.current);
+      observer.observe(videoEl);
+
 
     return () => observer.disconnect();
-  }, [post.type,context]);
+  };
+
+  // 🔥 Defer observer until browser is idle
+  if ('requestIdleCallback' in window) {
+    const id = (window as any).requestIdleCallback(setupObserver);
+    return () => (window as any).cancelIdleCallback?.(id);
+  } else {
+    const id = setTimeout(setupObserver, 0);
+    return () => clearTimeout(id);
+  }
+}, [post.type, context, hasStarted]);
+
 
   // Auto-hide controls after 3 seconds of inactivity when playing
-  useEffect(() => {
-    if (isPlaying && showControls) {
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-      
-      controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false);
-      }, 3000);
+
+useEffect(() => {
+  if (!(isPlaying && showControls)) return;
+
+  const startTimer = () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
     }
-    
-    return () => {
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    };
-  }, [isPlaying, showControls]);
+
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  };
+
+  // 🔥 Defer timer setup until browser is idle
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(startTimer);
+  } else {
+    setTimeout(startTimer, 0);
+  }
+
+  return () => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+  };
+}, [isPlaying, showControls]);
+
+
+
+  useEffect(() => {
+  setVideoReady(false);
+}, [post.id]);
+
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
@@ -137,19 +206,25 @@ export function FeedCard({ post, allPosts = [], postIndex = 0,context = 'feed',o
   };
 
   const togglePlay = (e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!videoRef.current) return;
+  if (e) e.stopPropagation();
 
-    if (videoRef.current.paused) {
-      videoRef.current.play().catch(() => {});
-      setIsPlaying(true);
-      setShowControls(true);
-    } else {
-      videoRef.current.pause();
-      setIsPlaying(false);
-      setShowControls(true); // Keep controls visible when paused
-    }
-  };
+  if (!hasStarted) {
+    setHasStarted(true);
+    setShowControls(true);
+  }
+
+  if (!videoRef.current) return;
+
+  if (videoRef.current.paused) {
+    videoRef.current.play().catch(() => {});
+    setIsPlaying(true);
+  } else {
+    videoRef.current.pause();
+    setIsPlaying(false);
+  }
+};
+
+
 
   const handleDownload = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -170,98 +245,6 @@ export function FeedCard({ post, allPosts = [], postIndex = 0,context = 'feed',o
     }
   };
 
-  // const handleShare = async (e: React.MouseEvent) => {
-  //   e.stopPropagation();
-  //   const url = `${window.location.origin}/reels/${post.id}`;
-    
-  //   const shareData = {
-  //     title: 'MemeVerse',
-  //     text: post.title,
-  //     url: url,
-  //   };
-
-  //   if (navigator.share) {
-  //     try {
-  //       await navigator.share(shareData);
-  //     } catch (err) {
-  //       // User cancelled or failed silently
-  //     }
-  //   } else {
-  //     navigator.clipboard.writeText(url);
-  //     toast.success('Link copied to clipboard!');
-  //   }
-  // };
-  // const handleShare = useCallback(
-  //   async (e: React.MouseEvent) => {
-  //     e.stopPropagation();
-  //     // const url = `${window.location.origin}/feed/${post.id}`;
-  //     // const url = `${window.location.origin}/api/post-details/?post_id=${post.id}`;
-
-  //     // const url = `${window.location.origin}/p?post_id=${post.id}`;
-  //     const url = `${window.location.origin}/post/${post.id}`;
-
-
-  //     try {
-  //       if (navigator.share) {
-  //         await navigator.share({ url, title: post.title });
-  //         toast.success('Shared!');
-  //       } else if (navigator.clipboard && navigator.clipboard.writeText) {
-  //         await navigator.clipboard.writeText(url);
-  //         toast.success('Link copied to clipboard!');
-  //       } else {
-  //         const temp = document.createElement('textarea');
-  //         temp.value = url;
-  //         document.body.appendChild(temp);
-  //         temp.select();
-  //         document.execCommand('copy');
-  //         temp.remove();
-  //         toast.success('Link copied to clipboard!');
-  //       }
-  //     } catch {
-  //       toast.error('Unable to share. Try copying the link manually.');
-  //     }
-  //   },
-  //   [post.id, post.title]
-  // );
-//   const handleShare = async (e: React.MouseEvent) => {
-//   e.stopPropagation();
-
-//   // const url = `${window.location.origin}/post/${post.id}`;
-//   const url = `${window.location.origin}/api/post-details?post_id=${post.id}`;
-
-
-//   try {
-//     // 1️⃣ Native share (mobile)
-//     if (navigator.share) {
-//       await navigator.share({
-//         title: post.title ?? 'MemeVerse',
-//         text: post.title ?? '',
-//         url,
-//       });
-//       toast.success('Shared!');
-//       return;
-//     }
-
-//     // 2️⃣ Clipboard API (modern browsers)
-//     if (navigator.clipboard?.writeText) {
-//       await navigator.clipboard.writeText(url);
-//       toast.success('Link copied to clipboard!');
-//       return;
-//     }
-
-//     // 3️⃣ Fallback (old browsers)
-//     const temp = document.createElement('textarea');
-//     temp.value = url;
-//     document.body.appendChild(temp);
-//     temp.select();
-//     document.execCommand('copy');
-//     temp.remove();
-//     toast.success('Link copied to clipboard!');
-//   } catch (err) {
-//     console.error(err);
-//     toast.error('Unable to share. Please copy link manually.');
-//   }
-// };
 
 const handleShare = useCallback(
   async (e: React.MouseEvent) => {
@@ -330,24 +313,24 @@ const handleShare = useCallback(
           <p className="text-sm">Device {post.deviceId}</p>
           {/* <p className="text-xs text-[#6B6B7B]">{formatNumber(post.views)} views</p> */}
           {context === 'feed' && (
-  <p className="text-xs text-[#6B6B7B]">
-    {formatNumber(post.views)} views
-  </p>
-)}
+              <p className="text-xs text-[#6B6B7B]">
+                {formatNumber(post.views)} views
+              </p>
+            )}
 
         </div>
            {/* Right Actions */}
-  {/* <div className="ml-auto flex absolute items-center right-0 gap-1"> */}
-    <div className="ml-auto flex items-center gap-1">
+          {/* <div className="ml-auto flex absolute items-center right-0 gap-1"> */}
+            <div className="ml-auto flex items-center gap-1">
 
-    {/* Download */}
-    <button
-      onClick={handleDownload}
-      className="p-2 rounded-full text-[#6B6B7B] hover:text-[#00A8FF] hover:bg-white/5 transition"
-      title="Download"
-    >
-      <Download className="w-5 h-5" />
-    </button>
+          {/* Download */}
+          <button
+            onClick={handleDownload}
+            className="p-2 rounded-full text-[#6B6B7B] hover:text-[#00A8FF] hover:bg-white/5 transition"
+            title="Download"
+          >
+            <Download className="w-5 h-5" />
+          </button>
 
     {/* More Menu */}
     <div className="relative">
@@ -392,6 +375,7 @@ const handleShare = useCallback(
               src={post.file_url}
               alt={post.title}
               className="w-full h-full object-cover"
+              unoptimized
             />
           </div>
         )
@@ -403,21 +387,44 @@ const handleShare = useCallback(
           onMouseMove={handleControlsInteraction}
           onMouseLeave={() => !isPlaying && setShowControls(false)}
         >
-          <video
-            preload='metadata'
-            poster={post.thumbnail}
-            ref={videoRef}
-            src={post.file_url}
-            className="w-full h-full object-cover"
-            loop
-            playsInline
-            muted={isMuted}
-            onEnded={() => setIsPlaying(false)}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-          />
+           {/* Thumbnail stays visible */}
+            <ImageWithFallback
+              src={posterImage}
+              alt={post.title}
+              fill
+               priority={context === 'single'}
+              fetchPriority={context === 'single' ? 'high' : 'auto'}
+              className="w-full h-full object-cover"
+            />
+                    {hasStarted && !videoReady && (
+            <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] z-[2]" />
+          )}
+                {/* Video mounts ONLY after interaction */}
+                {hasStarted && (
+                  <video
+                    ref={videoRef}
+                    src={post.file_url}
+                    className="w-full h-full object-cover absolute inset-0"
+                    preload="metadata"
+                    loop
+                    playsInline
+                    muted={isMuted}
+                    onEnded={() => setIsPlaying(false)}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onTimeUpdate={handleTimeUpdate}
+                    onLoadedMetadata={handleLoadedMetadata}
+                     onLoadedData={() => {                     // 🎬 first frame ready
+                              if (!videoReady) {
+                                setVideoReady(true);
+                                videoRef.current?.play().catch(() => {});
+                                setIsPlaying(true);
+                              }
+                            }}
+                  />
+                )}
+
+          
           
           {/* Center Play Button Overlay */}
           {!isPlaying && (

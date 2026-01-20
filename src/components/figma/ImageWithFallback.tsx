@@ -1,7 +1,9 @@
+
+
 import { useState } from 'react'
 import Image, { ImageProps } from 'next/image'
 
-type ImageWithFallbackProps = Omit<ImageProps, 'src'> & {
+type ImageWithFallbackProps = Omit<ImageProps, 'src' | 'width' | 'height'> & {
   src: string
   fallbackSrc?: string
 }
@@ -13,16 +15,29 @@ export function ImageWithFallback({
   src,
   fallbackSrc = ERROR_IMG_SRC,
   alt,
+  className,
+  unoptimized,
+  sizes = '(max-width: 768px) 100vw, 480px',
   ...props
 }: ImageWithFallbackProps) {
   const [didError, setDidError] = useState(false)
 
+  const imageSrc =
+    typeof src === 'string' && src.startsWith('http')
+      ? src
+      : fallbackSrc
+
   return (
     <Image
-      src={didError ? fallbackSrc : src}
-      alt={alt}
-      {...props}
+      src={didError ? fallbackSrc : imageSrc}
+      alt={alt || 'Image'}
+      fill                         // ✅ REQUIRED FIX
+      className={className}
+      unoptimized={unoptimized}
+      sizes={sizes}
       onError={() => setDidError(true)}
+      {...props}
     />
   )
 }
+
